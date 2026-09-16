@@ -148,6 +148,10 @@ npm run pack       # unpacked .app in release/mac-arm64/ (fast, for testing)
 npm run dist       # release/Skill Atlas-<version>-<arch>.dmg + .zip
 ```
 
+Working on this repo with a coding agent? [CLAUDE.md](CLAUDE.md) holds the project
+conventions, and the `authoring-skills` skill in `.claude/skills/` carries the full rules for
+writing skills, agents and plugins that this app can index.
+
 The app runs the same local server on a random loopback port and shows the UI in a native window with a menu: **File → Add Project** (⌘O), **Rescan** (⌘R), **Release Plugin** (⇧⌘R), **View → List / Flow / Network** (⌘1 / ⌘2 / ⌘3), **Search** (⌘F). Folder picking and "Open" / "Finder" use native dialogs. Project data lives in `~/Library/Application Support/Skill Atlas/data/projects.json`; the first launch from a source checkout copies the browser-mode list from `./data/` if present.
 
 The `.dmg` is unsigned unless you add Apple signing credentials to the build; see [SIGNING.md](SIGNING.md).

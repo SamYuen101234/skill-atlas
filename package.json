@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "d3": "^7.9.0",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "js-yaml": "^5.4.2"
   },
   "devDependencies": {

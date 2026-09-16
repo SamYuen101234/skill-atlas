@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Skill Atlas</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Skill Atlas</h1>
+        <button id="add-project-btn" class="btn primary" title="Add a project">+ Add project</button>
+      </div>
+      <input id="project-filter" class="input" type="search" placeholder="Filter projects…" />
+      <ul id="project-list" class="project-list"></ul>
+      <div class="sidebar-footer" id="sidebar-footer"></div>
+    </aside>
+
+    <main class="main">
+      <div id="empty-state" class="empty-state">
+        <h2>No project selected</h2>
+        <p>Add a project folder to scan it for skills, agents, MCP servers, tools and workflows.</p>
+        <button class="btn primary" id="empty-add-btn">+ Add project</button>
+      </div>
+
+      <div id="project-view" class="project-view" hidden>
+        <header class="project-header">
+          <div>
+            <h2 id="project-name"></h2>
+            <div class="project-path" id="project-path"></div>
+            <div class="project-meta" id="project-meta"></div>
+          </div>
+          <div class="header-actions">
+            <div class="view-toggle" id="view-toggle">
+              <button data-view="list" class="active">List</button>
+              <button data-view="flow">Flow</button>
+              <button data-view="graph">Network</button>
+            </div>
+            <div class="menu-wrap">
+              <button class="btn primary" id="release-btn" title="Bump the plugin version, write the changelog, optionally commit and tag" hidden>⬆ Release</button>
+              <div class="menu" id="release-menu" hidden></div>
+            </div>
+            <button class="btn" id="reveal-btn" title="Reveal in Finder">Finder</button>
+            <button class="btn" id="rescan-btn">Rescan</button>
+            <button class="btn danger" id="remove-btn">Remove</button>
+          </div>
+        </header>
+
+        <div class="cat-tiles" id="cat-tiles"></div>
+
+        <div class="toolbar">
+          <input id="item-filter" class="input" type="search" placeholder="Search names, descriptions, paths…" />
+          <select id="author-filter" class="input select" title="Filter by author"></select>
+          <div class="kind-chips" id="kind-chips"></div>
+        </div>
+
+        <div id="items" class="items"></div>
+
+        <div id="graph-wrap" class="graph-wrap" hidden>
+          <div class="graph-legend" id="graph-legend"></div>
+          <div class="graph" id="graph"></div>
+          <div class="graph-hint" id="graph-hint"></div>
+        </div>
+      </div>
+    </main>
+
+    <section class="detail" id="detail" hidden>
+      <div class="detail-header">
+        <div class="detail-title" id="detail-title"></div>
+        <div class="detail-actions">
+          <button class="btn small role-btn" id="detail-role-start" title="Mark as a start point in the flow graph">Start</button>
+          <button class="btn small role-btn" id="detail-role-end" title="Mark as an end point in the flow graph">End</button>
+          <button class="btn small" id="detail-version" hidden>Version</button>
+          <button class="btn small" id="detail-open">Open</button>
+          <button class="btn small" id="detail-close">✕</button>
+        </div>
+      </div>
+      <div class="detail-path" id="detail-path"></div>
+      <dl class="detail-meta" id="detail-meta"></dl>
+      <pre class="detail-content" id="detail-content"></pre>
+    </section>
+  </div>
+
+  <dialog id="add-dialog">
+    <form method="dialog" id="add-form">
+      <h3>Add project</h3>
+      <label>
+        <span>Folder path</span>
+        <div class="row">
+          <input id="add-path" class="input" type="text" placeholder="/Users/you/code/my-project or ~/code/my-project" autocomplete="off" required />
+          <button type="button" class="btn" id="browse-btn">Browse…</button>
+        </div>
+      </label>
+      <label>
+        <span>Display name <span class="muted">(optional)</span></span>
+        <input id="add-name" class="input" type="text" placeholder="Defaults to folder name" />
+      </label>
+      <div class="error" id="add-error"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="add-cancel">Cancel</button>
+        <button type="submit" class="btn primary" id="add-submit">Add &amp; scan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="version-dialog">
+    <form method="dialog" id="version-form">
+      <h3>Release <span id="ver-name"></span></h3>
+      <div class="ver-grid">
+        <div class="ver-box"><div class="muted">Current</div><div class="ver-big" id="ver-current"></div><div class="muted small" id="ver-market"></div></div>
+        <div class="ver-box"><div class="muted">Last tag</div><div class="ver-big" id="ver-tag"></div><div class="muted small" id="ver-branch"></div></div>
+      </div>
+      <div>
+        <div class="muted">Changed since last release <span id="ver-changed-n"></span></div>
+        <ul class="ver-changed" id="ver-changed"></ul>
+      </div>
+      <fieldset class="ver-bump">
+        <legend>New version</legend>
+        <label><input type="radio" name="bump" value="patch" checked /> Patch <code id="ver-patch"></code> <span class="muted">wording tweaks, fixes</span></label>
+        <label><input type="radio" name="bump" value="minor" /> Minor <code id="ver-minor"></code> <span class="muted">new skill, agent or tool</span></label>
+        <label><input type="radio" name="bump" value="major" /> Major <code id="ver-major"></code> <span class="muted">breaking change to how a skill is called</span></label>
+        <label><input type="radio" name="bump" value="custom" /> Custom <input id="ver-custom" class="input inline" placeholder="1.2.3" /></label>
+      </fieldset>
+      <label>Changelog entry
+        <textarea id="ver-changelog" class="input" rows="4" placeholder="- What changed and why"></textarea>
+      </label>
+      <div class="ver-opts">
+        <label><input type="checkbox" id="ver-files" checked /> Update <code>metadata.version</code> in <span id="ver-files-n"></span> skills/agents</label>
+        <label><input type="checkbox" id="ver-manifests" checked /> Update <span id="ver-manifests-n"></span> package manifest(s)</label>
+        <label><input type="checkbox" id="ver-commit" /> Git commit the release</label>
+        <label><input type="checkbox" id="ver-gittag" /> Git tag <code id="ver-tagname"></code></label>
+      </div>
+      <div class="error" id="ver-error"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="ver-cancel">Cancel</button>
+        <button type="submit" class="btn primary" id="ver-submit">Write files</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="vendor/d3.min.js"></script>
+  <script src="graph.js"></script>
+  <script src="flow.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

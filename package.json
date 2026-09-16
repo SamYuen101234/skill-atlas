@@ -1,0 +1,80 @@
+{
+  "name": "skill-atlas",
+  "version": "0.1.0",
+  "description": "Add projects and scan them for skills, agents, MCP servers, tools and workflows",
+  "main": "main.js",
+  "author": "Sam Yuen",
+  "license": "MIT",
+  "homepage": "https://github.com/SamYuen101234/skill-atlas",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SamYuen101234/skill-atlas.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "app": "electron .",
+    "pack": "electron-builder --mac --dir",
+    "dist": "electron-builder --mac"
+  },
+  "dependencies": {
+    "d3": "^7.9.0",
+    "express": "^4.21.2",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "electron": "^44.4.0",
+    "electron-builder": "^26.15.3"
+  },
+  "productName": "Skill Atlas",
+  "build": {
+    "appId": "com.samyuen.skillatlas",
+    "productName": "Skill Atlas",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "server.js",
+      "scanner.js",
+      "versioning.js",
+      "public/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "darkModeSupport": true,
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
+  }
+}

@@ -59,6 +59,7 @@ button, input { font: inherit; color: inherit; }
 .main { overflow: auto; padding: 24px 28px; min-width: 0; }
 .empty-state { max-width: 460px; margin: 15vh auto; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .empty-state h2 { color: var(--text); }
+.project-item .badge { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 5px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); vertical-align: 1px; }
 
 .project-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
 .project-header h2 { font-size: 22px; }
@@ -116,6 +117,7 @@ button, input { font: inherit; color: inherit; }
 .input { width: 100%; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; outline: none; }
 .input:focus { border-color: var(--accent); }
 .row { display: flex; gap: 8px; }
+.row.center { justify-content: center; }
 .muted { color: var(--muted); font-weight: 400; }
 
 dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 22px; width: 520px; max-width: 92vw; }

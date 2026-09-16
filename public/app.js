@@ -42,11 +42,20 @@ const el = (tag, cls, text) => {
 
 // ---------- api ----------
 async function api(method, url, body) {
-  const res = await fetch(url, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // The server runs in a terminal, and `npm run dev` restarts it on every file save.
+    // A request in flight at that moment dies as a bare "Failed to fetch", which says
+    // nothing about what went wrong or what to do about it. The folder picker is the
+    // usual casualty: it stays open until you answer the dialog.
+    throw new Error("Lost the connection to the Skill Atlas server — is it still running?");
+  }
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
@@ -65,6 +74,10 @@ function toast(msg, ms = 2500, wide = false) {
 }
 
 // ---------- projects ----------
+// What to show as a project's location: a global entry is scanned from $HOME but only
+// covers the config folder inside it, so that is the honest path to display.
+const projectPath = (p) => p.dir || p.path;
+
 async function loadProjects() {
   state.projects = await api("GET", "/api/projects");
   renderProjectList();
@@ -76,9 +89,11 @@ function renderProjectList() {
   list.innerHTML = "";
   const q = state.projectQuery.toLowerCase();
   for (const p of state.projects) {
-    if (q && !(p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q))) continue;
+    if (q && !(p.name.toLowerCase().includes(q) || projectPath(p).toLowerCase().includes(q))) continue;
     const li = el("li", "project-item" + (state.current?.id === p.id ? " active" : ""));
-    li.append(el("div", "name", p.name), el("div", "path", p.path));
+    const name = el("div", "name", p.name);
+    if (p.global) name.append(el("span", "badge", "global"));
+    li.append(name, el("div", "path", projectPath(p)));
     const counts = el("div", "counts");
     for (const c of CATS) {
       const n = p.counts?.[c.key] || 0;
@@ -113,7 +128,7 @@ function renderProject() {
   $("project-view").hidden = !p;
   if (!p) return;
   $("project-name").textContent = p.name;
-  $("project-path").textContent = p.path;
+  $("project-path").textContent = projectPath(p);
   const s = p.scan;
   $("project-meta").textContent = s
     ? `Scanned ${new Date(s.scannedAt).toLocaleString()} · ${s.filesScanned.toLocaleString()} files in ${s.durationMs} ms${s.truncated ? " · (truncated: too many files)" : ""}`
@@ -401,6 +416,7 @@ async function setRole(role) {
 }
 
 function projectPlugins() {
+  if (state.current?.global) return []; // installed copies, not plugins this user releases
   return (state.current?.scan?.categories?.plugins || []).filter((p) => p.kind === "plugin");
 }
 function renderReleaseButton() {
@@ -539,6 +555,21 @@ async function submitAdd(e) {
   }
 }
 
+async function scanGlobalConfig() {
+  const btns = [$("add-global-btn"), $("empty-global-btn")];
+  btns.forEach((b) => (b.disabled = true));
+  try {
+    const p = await api("POST", "/api/global");
+    await loadProjects();
+    await selectProject(p.id);
+    toast(p.existed ? "Global config rescanned" : `Scanned ${p.dir}`);
+  } catch (e) {
+    toast(e.message, 4000);
+  } finally {
+    btns.forEach((b) => (b.disabled = false));
+  }
+}
+
 async function browse() {
   const btn = $("browse-btn");
   btn.disabled = true;
@@ -555,6 +586,8 @@ async function browse() {
 // ---------- wiring ----------
 $("add-project-btn").onclick = openAddDialog;
 $("empty-add-btn").onclick = openAddDialog;
+$("add-global-btn").onclick = scanGlobalConfig;
+$("empty-global-btn").onclick = scanGlobalConfig;
 $("add-cancel").onclick = () => $("add-dialog").close();
 $("add-form").onsubmit = submitAdd;
 $("browse-btn").onclick = browse;
@@ -598,6 +631,7 @@ if (window.native) {
   document.documentElement.classList.add("native-app");
   window.native.onCommand((cmd) => {
     if (cmd === "add-project") return openAddDialog();
+    if (cmd === "scan-global") return scanGlobalConfig();
     if (cmd === "rescan") return state.current && $("rescan-btn").click();
     if (cmd === "release") return state.current && !$("release-btn").hidden && $("release-btn").click();
     if (cmd === "focus-search") return (state.current ? $("item-filter") : $("project-filter")).focus();

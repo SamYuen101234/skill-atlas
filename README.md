@@ -34,6 +34,7 @@ Everything runs locally; nothing is uploaded anywhere.
 - [How it works](#how-it-works)
 - [What it finds](#what-it-finds)
   - [Making your own workflow discoverable](#making-your-own-workflow-discoverable)
+- [Scanning the global `~/.claude` folder](#scanning-the-global-claude-folder)
 - [Build from source](#build-from-source)
 - [Run in a browser](#run-in-a-browser)
 - [Relationship graph](#relationship-graph)
@@ -110,7 +111,7 @@ them, and writes one JSON file. Nothing leaves the machine.
 |-----------|---------------|
 | Skills    | `SKILL.md` files (Agent Skills spec), `.claude/commands/**/*.md` slash commands, `.cursor/rules/*.mdc` |
 | Agents    | Markdown files in `.claude/agents/`, `agents/`, `.agents/`, `.github/agents/`, `.cursor/agents/` (frontmatter: name, description, model, tools); a root `AGENTS.md` (the cross-tool convention used by Codex, Cursor, Aider and others) |
-| MCP       | `.mcp.json`, `.claude/settings*.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`, `.claude-plugin/plugin.json`, `mcp.json`, `claude_desktop_config.json` |
+| MCP       | `.mcp.json`, `.claude/settings*.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`, `.claude-plugin/plugin.json`, `mcp.json`, `claude_desktop_config.json`, `~/.claude.json` (user-scope servers) |
 | Tools     | Tool definitions in source: MCP TS SDK `server.tool(...)`, Python `@mcp.tool` / `@tool`, LangChain `Tool(name=...)`, Anthropic/OpenAI tool schemas, Vercel AI SDK `tool({...})`, Go `mcp.NewTool`, Rust `#[tool]`; plus Claude Code permission rules and hooks in `.claude/settings*.json` |
 | Workflows | `WORKFLOW.md` or `workflow.yaml`/`workflow.json` manifests, script-workflow folders (see below), GitHub Actions, GitLab CI, `workflows/` folders (YAML, JSON, n8n exports), Prefect `@flow`, Airflow `@dag`, Temporal `@workflow.defn` |
 | Plugins   | `.claude-plugin/plugin.json`; a `marketplace.json` listing that points at a plugin folder in the project is merged into that plugin (shown as `listedIn`), other listings appear on their own |
@@ -145,6 +146,35 @@ Two ways, in order of preference:
 2. **Rely on the heuristic.** A folder is reported as a `script-workflow` when its name (or the runner's name) contains *workflow*, *pipeline* or *orchestrat*, and it contains a runner script: `run*.sh`, `run*.py`, `main.py`, `pipeline.py`, `workflow.py`, `Makefile`, `Justfile` or `Taskfile.yml`. The description comes from the runner's leading comment block or the folder's README; subfolders with code are listed as stages and `VAR="${VAR:-default}"` lines are listed as env vars.
 
 Folders such as `node_modules`, `.git`, `dist`, `.venv` are skipped.
+
+## Scanning the global `~/.claude` folder
+
+Not everything lives in a project. Skills you wrote for yourself, agents you reuse
+everywhere, marketplace plugins you installed and user-scope MCP servers all sit in
+`~/.claude` and apply to every repo you open. **Global** in the sidebar (⌘G in the app,
+`POST /api/global`) scans that folder and adds it to the list as an entry named *Global
+config*, marked with a `global` badge. It behaves like any other project: same categories,
+same graph, same search, same Rescan.
+
+What it covers:
+
+| Found | Where |
+|-------|-------|
+| Skills | `~/.claude/skills/*/SKILL.md` |
+| Commands | `~/.claude/commands/**/*.md` |
+| Agents | `~/.claude/agents/*.md` |
+| Plugins | `~/.claude/plugins/repos/**/.claude-plugin/plugin.json`, and everything inside them |
+| MCP servers | `~/.claude/settings.json` and `~/.claude.json` |
+| Permissions and hooks | `~/.claude/settings*.json` |
+
+Claude Code's own runtime state — `projects/` (transcripts), `sessions/`,
+`shell-snapshots/`, `statsig/`, `todos/`, `file-history/`, `backups/` and the rest — is
+skipped: it is not authored content and transcripts alone can run to tens of thousands of
+files. Nothing else in your home directory is read, and the file viewer will not open a
+path outside the config folder even though the entry is rooted at `$HOME`.
+
+Set `CLAUDE_CONFIG_DIR` and the scan follows it. The **Release** action is hidden for the
+global entry — the plugins in there are installed copies, not plugins you publish.
 
 ## Build from source
 
@@ -538,6 +568,7 @@ for a change that invalidates an existing `projects.json`.
 |--------|------|---------|
 | GET    | `/api/projects` | List projects with counts |
 | POST   | `/api/projects` `{path, name?}` | Add (or rescan an existing) project |
+| POST   | `/api/global` | Add (or rescan) the global `~/.claude` config |
 | GET    | `/api/projects/:id` | Full scan result |
 | POST   | `/api/projects/:id/scan` | Rescan |
 | PATCH  | `/api/projects/:id` `{name}` | Rename |

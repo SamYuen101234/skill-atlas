@@ -12,7 +12,10 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <h1>Skill Atlas</h1>
-        <button id="add-project-btn" class="btn primary" title="Add a project">+ Add project</button>
+        <div class="header-actions">
+          <button id="add-global-btn" class="btn" title="Scan the global ~/.claude folder for skills, agents, plugins and MCP servers">Global</button>
+          <button id="add-project-btn" class="btn primary" title="Add a project">+ Add project</button>
+        </div>
       </div>
       <input id="project-filter" class="input" type="search" placeholder="Filter projects…" />
       <ul id="project-list" class="project-list"></ul>
@@ -23,7 +26,10 @@
       <div id="empty-state" class="empty-state">
         <h2>No project selected</h2>
         <p>Add a project folder to scan it for skills, agents, MCP servers, tools and workflows.</p>
-        <button class="btn primary" id="empty-add-btn">+ Add project</button>
+        <div class="row center">
+          <button class="btn primary" id="empty-add-btn">+ Add project</button>
+          <button class="btn" id="empty-global-btn">Scan global ~/.claude</button>
+        </div>
       </div>
 
       <div id="project-view" class="project-view" hidden>

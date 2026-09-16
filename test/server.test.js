@@ -231,6 +231,84 @@ describe("HTTP API", () => {
     });
   });
 
+  describe("global config", () => {
+    let fakeHome;
+
+    before(async () => {
+      fakeHome = await makeProject({
+        ".claude/skills/global-demo/SKILL.md": "---\nname: global-demo\ndescription: A user-level skill.\n---\n",
+        ".claude/settings.json": JSON.stringify({ mcpServers: { linear: { command: "linear-mcp" } } }),
+        ".claude/projects/repo/transcript.jsonl": "{}\n",
+        ".ssh/id_rsa": "PRIVATE KEY\n",
+      });
+      process.env.CLAUDE_CONFIG_DIR = path.join(fakeHome, ".claude");
+    });
+
+    after(async () => {
+      delete process.env.CLAUDE_CONFIG_DIR;
+      await removeProject(fakeHome);
+    });
+
+    test("adds the global config as a project and scans it", async () => {
+      const { status, body } = await api("POST", "/api/global");
+      assert.equal(status, 201);
+      assert.equal(body.global, true);
+      assert.equal(body.dir, path.join(fakeHome, ".claude"));
+      assert.equal(body.path, fakeHome);
+      assert.equal(body.counts.skills, 1);
+      assert.equal(body.counts.mcp, 1);
+    });
+
+    test("refreshes the existing entry instead of adding a second one", async () => {
+      const first = (await api("POST", "/api/global")).body;
+      const { status, body } = await api("POST", "/api/global");
+      assert.equal(status, 200);
+      assert.equal(body.existed, true);
+      assert.equal(body.id, first.id);
+      assert.equal((await api("GET", "/api/projects")).body.length, 1);
+    });
+
+    test("rescans through the normal scan route", async () => {
+      const p = (await api("POST", "/api/global")).body;
+      const { status, body } = await api("POST", `/api/projects/${p.id}/scan`);
+      assert.equal(status, 200);
+      assert.equal(body.scan.categories.skills[0].name, "global-demo");
+    });
+
+    test("serves a file from inside the config folder", async () => {
+      const p = (await api("POST", "/api/global")).body;
+      const rel = ".claude/skills/global-demo/SKILL.md";
+      const { status, body } = await api("GET", `/api/projects/${p.id}/file?path=${encodeURIComponent(rel)}`);
+      assert.equal(status, 200);
+      assert.match(body.content, /global-demo/);
+    });
+
+    test("refuses to read the rest of the home directory", async () => {
+      const p = (await api("POST", "/api/global")).body;
+      for (const attempt of [".ssh/id_rsa", "", ".claude.json.bak"]) {
+        const { status, body } = await api("GET", `/api/projects/${p.id}/file?path=${encodeURIComponent(attempt)}`);
+        assert.equal(status, 400, `expected 400 for "${attempt}"`);
+        assert.match(body.error, /Invalid path/);
+      }
+    });
+
+    test("adding the home directory as a normal project does not hijack the global entry", async () => {
+      const g = (await api("POST", "/api/global")).body;
+      const { status, body } = await api("POST", "/api/projects", { path: fakeHome });
+      assert.equal(status, 201);
+      assert.notEqual(body.id, g.id);
+      assert.equal(body.global, false);
+    });
+
+    test("404s when the config folder does not exist", async () => {
+      process.env.CLAUDE_CONFIG_DIR = path.join(fakeHome, "absent");
+      const { status, body } = await api("POST", "/api/global");
+      assert.equal(status, 404);
+      assert.match(body.error, /No global config folder/);
+      process.env.CLAUDE_CONFIG_DIR = path.join(fakeHome, ".claude");
+    });
+  });
+
   test("deletes a project and forgets it", async () => {
     const p = await addFixture();
     assert.equal((await api("DELETE", `/api/projects/${p.id}`)).status, 204);

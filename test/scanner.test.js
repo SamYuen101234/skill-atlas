@@ -1,6 +1,8 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { scanProject } from "../scanner.js";
+import os from "node:os";
+import path from "node:path";
+import { scanProject, scanGlobal, globalConfigDir, isGlobalPath } from "../scanner.js";
 import { makeProject, removeProject, byName, hasEdge } from "./helpers.js";
 
 // One fixture project exercising every detector, scanned once for the whole suite.
@@ -352,5 +354,129 @@ author: Katherine Johnson
     const authors = new Set(scan.categories.skills.map((s) => s.meta.author).filter(Boolean));
     assert.ok(authors.has("Ada Lovelace"));
     assert.ok(authors.has("Ada Lovelace <ada@example.com>"));
+  });
+});
+
+// A fake home directory: the global config folder plus the noise Claude Code keeps beside it.
+const GLOBAL_FIXTURE = {
+  ".claude/skills/summarise/SKILL.md": `---
+name: summarise
+description: Summarise a document.
+metadata:
+  author: Ada
+---
+`,
+  ".claude/agents/triage.md": `---
+name: triage
+description: Sorts incoming issues.
+model: haiku
+---
+`,
+  ".claude/commands/standup.md": `---
+description: Write today's standup.
+---
+`,
+  ".claude/settings.json": JSON.stringify({
+    mcpServers: { linear: { command: "npx", args: ["-y", "linear-mcp"] } },
+    permissions: { allow: ["Bash(npm test)"] },
+  }),
+  ".claude/plugins/repos/acme/toolkit/.claude-plugin/plugin.json": JSON.stringify({
+    name: "toolkit", description: "Installed from a marketplace.", version: "2.0.0", author: "Acme",
+  }),
+  ".claude/plugins/repos/acme/toolkit/skills/lint/SKILL.md": `---
+name: lint
+description: Lint the repo.
+---
+`,
+  ".claude.json": JSON.stringify({ mcpServers: { userscope: { command: "user-server" } } }),
+  // Runtime state that must not be scanned.
+  ".claude/projects/-Users-x-repo/a1b2.jsonl": '{"type":"user"}\n',
+  ".claude/projects/-Users-x-repo/SKILL.md": "---\nname: from-a-transcript\n---\n",
+  ".claude/shell-snapshots/snapshot-zsh-1.sh": "echo hi\n",
+  ".claude/sessions/s1/agents/ghost.md": "---\nname: ghost\n---\n",
+};
+
+describe("global config scan", () => {
+  let home, scan;
+  before(async () => {
+    home = await makeProject(GLOBAL_FIXTURE);
+    scan = await scanGlobal({ dir: path.join(home, ".claude") });
+  });
+  after(async () => await removeProject(home));
+
+  test("reports the config dir it scanned and the root it scanned from", () => {
+    assert.equal(scan.dir, path.join(home, ".claude"));
+    assert.equal(scan.root, home);
+  });
+
+  test("finds user-level skills, agents and commands", () => {
+    assert.ok(byName(scan.categories.skills, "summarise"), "skill not found");
+    assert.ok(byName(scan.categories.agents, "triage"), "agent not found");
+    assert.ok(byName(scan.categories.skills, "/standup"), "command not found");
+  });
+
+  test("paths stay relative to the home directory, so the .claude prefix survives", () => {
+    assert.equal(byName(scan.categories.skills, "summarise").path, ".claude/skills/summarise/SKILL.md");
+  });
+
+  test("finds installed plugins and the skills inside them", () => {
+    const plugin = byName(scan.categories.plugins, "toolkit");
+    assert.equal(plugin.meta.version, "2.0.0");
+    const lint = byName(scan.categories.skills, "lint");
+    assert.equal(lint.meta.author, "Acme", "should inherit the plugin's author");
+  });
+
+  test("finds MCP servers from settings.json and from ~/.claude.json", () => {
+    assert.equal(byName(scan.categories.mcp, "linear").meta.source, "claude-settings");
+    assert.equal(byName(scan.categories.mcp, "userscope").meta.source, "claude-user");
+  });
+
+  test("reads permissions from the user settings", () => {
+    assert.ok(byName(scan.categories.tools, "Bash(npm test)"));
+  });
+
+  test("skips transcripts, sessions and shell snapshots", () => {
+    assert.equal(byName(scan.categories.skills, "from-a-transcript"), undefined);
+    assert.equal(byName(scan.categories.agents, "ghost"), undefined);
+    assert.ok(scan.filesScanned < 12, `walked too much: ${scan.filesScanned} files`);
+  });
+
+  test("nothing outside the config folder is read", async () => {
+    const other = await makeProject({ ...GLOBAL_FIXTURE, "code/app/SKILL.md": "---\nname: elsewhere\n---\n" });
+    const s = await scanGlobal({ dir: path.join(other, ".claude") });
+    assert.equal(byName(s.categories.skills, "elsewhere"), undefined);
+    await removeProject(other);
+  });
+
+  test("a missing config folder scans as empty rather than throwing", async () => {
+    const s = await scanGlobal({ dir: path.join(home, "nope") });
+    assert.equal(s.categories.skills.length, 0);
+  });
+});
+
+describe("globalConfigDir", () => {
+  test("defaults to ~/.claude", () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    assert.equal(globalConfigDir(), path.join(os.homedir(), ".claude"));
+  });
+
+  test("honours CLAUDE_CONFIG_DIR, expanding ~", () => {
+    process.env.CLAUDE_CONFIG_DIR = "~/somewhere/.claude";
+    assert.equal(globalConfigDir(), path.join(os.homedir(), "somewhere/.claude"));
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+});
+
+describe("isGlobalPath", () => {
+  const dir = "/Users/x/.claude";
+  test("accepts the config folder, its contents and the sibling .claude.json", () => {
+    assert.ok(isGlobalPath(dir, ".claude"));
+    assert.ok(isGlobalPath(dir, ".claude/skills/a/SKILL.md"));
+    assert.ok(isGlobalPath(dir, ".claude.json"));
+  });
+  test("rejects everything else in the home directory", () => {
+    assert.ok(!isGlobalPath(dir, ".ssh/id_rsa"));
+    assert.ok(!isGlobalPath(dir, ""));
+    assert.ok(!isGlobalPath(dir, ".claudex/x"));
   });
 });

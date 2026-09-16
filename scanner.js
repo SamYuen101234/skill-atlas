@@ -1,5 +1,6 @@
 // Scans a project directory for skills, agents, MCP servers, tools and workflows.
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import yaml from "js-yaml";
 
@@ -12,14 +13,26 @@ const IGNORE_DIRS = new Set([
 const MAX_DEPTH = 10;
 const MAX_FILES = 40000;
 const MAX_SOURCE_BYTES = 512 * 1024;
+// Config JSON is read whole, and a long-lived ~/.claude.json outgrows the source limit.
+const MAX_JSON_BYTES = 8 * 1024 * 1024;
+
+// Claude Code's own runtime state inside ~/.claude. None of it is authored content and
+// transcripts alone can run to tens of thousands of files, so the global scan skips it.
+const GLOBAL_RUNTIME_DIRS = [
+  "projects", "sessions", "session-env", "shell-snapshots", "statsig", "todos",
+  "file-history", "backups", "logs", "downloads", "ide", "tool-results", "history",
+];
 
 const SOURCE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".py", ".go", ".rs", ".rb", ".java", ".kt", ".cs"]);
 const WORKFLOW_EXT = new Set([".yml", ".yaml"]);
 
 // ---------- helpers ----------
 
-async function walk(root) {
+// include: paths relative to root to walk, instead of everything (missing ones are skipped).
+// ignore: paths relative to root to skip, on top of the built-in directory-name list.
+async function walk(root, { include, ignore } = {}) {
   const files = [];
+  const skip = new Set(ignore || []);
   async function visit(dir, depth) {
     if (depth > MAX_DEPTH || files.length >= MAX_FILES) return;
     let entries;
@@ -32,14 +45,24 @@ async function walk(root) {
       if (files.length >= MAX_FILES) return;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
-        if (IGNORE_DIRS.has(e.name)) continue;
+        if (IGNORE_DIRS.has(e.name) || (skip.size && skip.has(rel(root, full)))) continue;
         await visit(full, depth + 1);
       } else if (e.isFile()) {
         files.push(full);
       }
     }
   }
-  await visit(root, 0);
+  if (!include) {
+    await visit(root, 0);
+    return files;
+  }
+  for (const name of include) {
+    const full = path.join(root, name);
+    let st;
+    try { st = await fs.stat(full); } catch { continue; }
+    if (st.isDirectory()) await visit(full, name.split("/").length);
+    else if (st.isFile()) files.push(full);
+  }
   return files;
 }
 
@@ -249,6 +272,8 @@ const MCP_FILE_PATTERNS = [
   { test: (r) => /(^|\/)\.claude-plugin\/plugin\.json$/.test(r), key: "mcpServers", source: "claude-plugin" },
   { test: (r) => /(^|\/)mcp\.json$/.test(r), key: "mcpServers", source: "generic" },
   { test: (r) => /(^|\/)claude_desktop_config\.json$/.test(r), key: "mcpServers", source: "claude-desktop" },
+  // User-scope servers (`claude mcp add -s user`) land in ~/.claude.json, next to the config dir.
+  { test: (r) => /(^|\/)\.claude\.json$/.test(r), key: "mcpServers", source: "claude-user" },
 ];
 
 async function scanMcp(root, files) {
@@ -257,7 +282,7 @@ async function scanMcp(root, files) {
     const r = rel(root, f);
     const pat = MCP_FILE_PATTERNS.find((p) => p.test(r));
     if (!pat) continue;
-    const text = await readText(f);
+    const text = await readText(f, MAX_JSON_BYTES);
     if (text == null) continue;
     const json = parseJson(text);
     if (!json || typeof json !== "object") continue;
@@ -802,11 +827,12 @@ async function buildGraph(root, categories) {
 
 // ---------- entry ----------
 
-export async function scanProject(root) {
+// opts is passed through to walk(): { include, ignore } narrows what is visited.
+export async function scanProject(root, opts = {}) {
   const stat = await fs.stat(root);
   if (!stat.isDirectory()) throw new Error("Not a directory");
   const started = Date.now();
-  const files = await walk(root);
+  const files = await walk(root, opts);
   const [skills, agents, mcp, tools, workflows, plugins] = await Promise.all([
     scanSkills(root, files),
     scanAgents(root, files),
@@ -834,4 +860,37 @@ export async function scanProject(root) {
     categories,
     graph,
   };
+}
+
+// ---------- global (user-level) config ----------
+
+// Where Claude Code keeps user-level config: ~/.claude, or $CLAUDE_CONFIG_DIR if set.
+export function globalConfigDir() {
+  const override = (process.env.CLAUDE_CONFIG_DIR || "").trim();
+  return override ? path.resolve(expandHome(override)) : path.join(os.homedir(), ".claude");
+}
+
+function expandHome(p) {
+  return p.startsWith("~") ? path.join(os.homedir(), p.slice(1)) : p;
+}
+
+// The skills, agents, commands, plugins and MCP servers installed for the user rather than
+// for one project. Scanned from the config dir's parent (normally the home directory) so
+// that every path is reported as ".claude/..." and the existing detection patterns — which
+// all key off that prefix — apply unchanged. Only the config dir and its sibling
+// .claude.json are walked; the rest of the home directory is never read.
+export async function scanGlobal({ dir = globalConfigDir() } = {}) {
+  const root = path.dirname(dir);
+  const name = path.basename(dir);
+  const scan = await scanProject(root, {
+    include: [name, ".claude.json"],
+    ignore: GLOBAL_RUNTIME_DIRS.map((d) => `${name}/${d}`),
+  });
+  return { ...scan, root, dir };
+}
+
+// Paths a global scan can produce, and the only ones the server will read back for it.
+export function isGlobalPath(dir, relPath) {
+  const prefix = path.basename(dir);
+  return relPath === ".claude.json" || relPath === prefix || relPath.startsWith(prefix + "/");
 }

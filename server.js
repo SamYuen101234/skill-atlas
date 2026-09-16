@@ -5,7 +5,7 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { scanProject } from "./scanner.js";
+import { scanProject, scanGlobal, globalConfigDir, isGlobalPath } from "./scanner.js";
 import { versionInfo, bumpVersion } from "./versioning.js";
 
 import { pathToFileURL } from "node:url";
@@ -87,6 +87,8 @@ function summary(p) {
     name: p.name,
     path: p.path,
     addedAt: p.addedAt,
+    global: p.global || false,
+    dir: p.dir || null,
     scannedAt: p.scan?.scannedAt || null,
     counts: Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v.length])),
     error: p.error || null,
@@ -95,7 +97,14 @@ function summary(p) {
 
 async function runScan(p) {
   try {
-    p.scan = await scanProject(p.path);
+    if (p.global) {
+      const { root, dir, ...scan } = await scanGlobal({ dir: p.dir });
+      p.path = root;
+      p.dir = dir;
+      p.scan = scan;
+    } else {
+      p.scan = await scanProject(p.path);
+    }
     p.error = null;
   } catch (e) {
     p.error = e.message;
@@ -118,7 +127,7 @@ app.post("/api/projects", async (req, res) => {
   } catch {
     return res.status(400).json({ error: "Directory does not exist" });
   }
-  const existing = db.projects.find((p) => p.path === abs);
+  const existing = db.projects.find((p) => !p.global && p.path === abs);
   if (existing) {
     await runScan(existing);
     return res.json({ ...summary(existing), existed: true });
@@ -134,6 +143,37 @@ app.post("/api/projects", async (req, res) => {
   db.projects.push(project);
   await runScan(project);
   res.status(201).json(summary(project));
+});
+
+// Add (or refresh) the user-level config as a project: the skills, agents, commands,
+// plugins and MCP servers in ~/.claude that apply to every project.
+app.post("/api/global", async (_req, res) => {
+  const dir = globalConfigDir();
+  try {
+    const st = await fs.stat(dir);
+    if (!st.isDirectory()) return res.status(400).json({ error: `${dir} is not a directory` });
+  } catch {
+    return res.status(404).json({ error: `No global config folder at ${dir}` });
+  }
+  let project = db.projects.find((p) => p.global);
+  const existed = !!project;
+  if (!project) {
+    project = {
+      id: crypto.randomUUID().slice(0, 8),
+      name: "Global config",
+      path: path.dirname(dir),
+      global: true,
+      dir,
+      addedAt: new Date().toISOString(),
+      scan: null,
+      error: null,
+    };
+    db.projects.unshift(project);
+  } else {
+    project.dir = dir;
+  }
+  await runScan(project);
+  res.status(existed ? 200 : 201).json({ ...summary(project), existed });
 });
 
 app.get("/api/projects/:id", (req, res) => {
@@ -206,6 +246,7 @@ app.get("/api/projects/:id/file", async (req, res) => {
   const p = findProject(req.params.id);
   if (!p) return res.status(404).json({ error: "Not found" });
   const relPath = String(req.query.path || "");
+  if (p.global && !isGlobalPath(p.dir, relPath)) return res.status(400).json({ error: "Invalid path" });
   const { abs, error, status } = await resolveInside(p.path, relPath);
   if (error) return res.status(status).json({ error });
   try {
@@ -232,7 +273,9 @@ app.post("/api/pick-folder", (_req, res) => {
 app.post("/api/projects/:id/open", async (req, res) => {
   const p = findProject(req.params.id);
   if (!p) return res.status(404).json({ error: "Not found" });
-  const relPath = String(req.body?.path || "");
+  // A global entry is rooted at the home directory; "" means its config folder, not $HOME.
+  const relPath = p.global ? String(req.body?.path || path.basename(p.dir)) : String(req.body?.path || "");
+  if (p.global && !isGlobalPath(p.dir, relPath)) return res.status(400).json({ error: "Invalid path" });
   const { abs, error, status } = await resolveInside(p.path, relPath);
   if (error) return res.status(status).json({ error });
   if (process.platform !== "darwin") return res.status(501).json({ error: "Only supported on macOS" });

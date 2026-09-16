@@ -32,6 +32,7 @@ function buildMenu() {
       label: "File",
       submenu: [
         { label: "Add Project…", accelerator: "CmdOrCtrl+O", click: () => send("add-project") },
+        { label: "Scan Global Config", accelerator: "CmdOrCtrl+G", click: () => send("scan-global") },
         { label: "Rescan Project", accelerator: "CmdOrCtrl+R", click: () => send("rescan") },
         { type: "separator" },
         { label: "Release Plugin…", accelerator: "CmdOrCtrl+Shift+R", click: () => send("release") },

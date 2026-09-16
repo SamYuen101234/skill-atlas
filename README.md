@@ -137,7 +137,7 @@ Two graph views are available from the toggle at the top right of a project:
 
 **Start and end points.** The flow view fills marked nodes solid with their category colour (a marked skill is solid blue, an agent solid purple, …); start points get a ▶ before the name and end points a ■ after it. The counters at the top left of the canvas highlight each group. Roles are marked explicitly: open a node and press **Start** or **End** in the detail panel (stored per project in `data/projects.json`), or declare `role: start` / `role: end` in a skill or agent's frontmatter. There is no automatic detection, because cross-references between skills and agents are often bidirectional and make in/out degree a poor signal.
 
-**Author filter.** The toolbar has an author dropdown built from `metadata.author` / `author` in skill, agent and workflow frontmatter and from `author` in plugin manifests. MCP servers take the author from a `pyproject.toml` or `package.json` in their folder (resolved from the command in `.mcp.json`) and pass it on to the tools they provide; anything inside a plugin folder with no author of its own inherits the plugin's author. The detail panel shows where an inherited author came from. It filters the list, the kind chips and both graph views; "No author" shows items without one.
+**Author filter.** The toolbar's author dropdown filters both graph views as well as the list — see [Filtering by author](#filtering-by-author).
 
 In both views: scroll to zoom, drag the background to pan, legend chips toggle categories and edge types, the category tiles focus the graph on one category plus its direct neighbours, and the search box highlights matching nodes.
 
@@ -152,6 +152,69 @@ Edges are derived during the scan:
 | mirror | Same name and category at two paths, e.g. a plugin copy. Hidden by default. |
 
 Unconnected nodes (typically permission rules) are hidden by default; toggle **show unconnected** in the legend.
+
+## Filtering by author
+
+**Author is the only metadata filter.** Alongside the search box and the category/kind
+chips, the toolbar has one dropdown, and it filters by author — there is no filtering by
+version, model, licence or any other field. Picking an author narrows the list, the kind
+chips and both graph views at once. `All authors` clears it, and `No author` shows exactly
+the items that have none, which is the quickest way to find what still needs attributing.
+
+### How to define an author
+
+Declare it in frontmatter or a manifest, depending on the item:
+
+| Item | Where you write it |
+|------|--------------------|
+| Skill (`SKILL.md`) | `author:` at the top level, or `metadata.author` |
+| Agent (`.md` under an agents folder) | `author:` at the top level, or `metadata.author` |
+| Workflow (`WORKFLOW.md`, `workflow.yaml`/`.json`) | `author:` at the top level, or `metadata.author` |
+| Plugin (`.claude-plugin/plugin.json`) | `"author"` — a string, or `{ "name": ..., "email": ... }` |
+| Marketplace listing (`marketplace.json`) | the entry's `author`, falling back to the file's `owner` |
+
+```markdown
+---
+name: my-skill
+description: What it does.
+metadata:
+  author: Ada Lovelace
+  email: ada@example.com
+---
+```
+
+An object form works too, and produces the same `Ada Lovelace <ada@example.com>`:
+
+```yaml
+author:
+  name: Ada Lovelace
+  email: ada@example.com
+```
+
+### What gets an author without you writing one
+
+Two kinds of item never declare an author directly and are filled in during the scan:
+
+- **MCP servers** take the author from a `pyproject.toml` or `package.json` in their own
+  folder — found by resolving the `command` / `args` in `.mcp.json` — and then pass it on to
+  the tools defined in that tree. Both PEP 621 (`authors = [{ name = "...", email = "..." }]`)
+  and Poetry (`authors = ["Name <email>"]`) are read.
+- **Anything inside a plugin folder** with no author of its own inherits the plugin's.
+
+Inheritance never overwrites a declared author, and permission rules and hooks are left out
+of it. When an author was inherited, the detail panel names the source — `plugin my-plugin`,
+`MCP server github`, or `package manifest` — so an unexpected attribution is traceable.
+
+Slash commands and cursor rules have no author field of their own; they only get one by
+sitting inside a plugin folder.
+
+### Keep the spelling identical
+
+The dropdown groups by the **exact** author string, and only strips the `<email>` part for
+display. So `Ada Lovelace` and `Ada Lovelace <ada@example.com>` are two separate entries
+that both read "Ada Lovelace" in the menu, and picking one hides the other's items. Pick one
+form per person and stay with it — the surest way is to declare the author once on the
+plugin and let everything inside inherit it.
 
 ## Plugin versioning
 
@@ -318,7 +381,7 @@ checked into the repo.
 
 | File | Covers |
 |------|--------|
-| [test/scanner.test.js](test/scanner.test.js) | Every detector (skills, slash commands, cursor rules, agents, MCP servers, tools, workflows, plugins), the graph edges between them, and the ignore rules |
+| [test/scanner.test.js](test/scanner.test.js) | Every detector (skills, slash commands, cursor rules, agents, MCP servers, tools, workflows, plugins), the graph edges between them, author resolution and inheritance, and the ignore rules |
 | [test/versioning.test.js](test/versioning.test.js) | `nextVersion` semver maths, `versionInfo` reporting, and what `bumpVersion` writes — plugin.json, marketplace entry, frontmatter, manifests, CHANGELOG — plus its path-containment and semver guards |
 | [test/server.test.js](test/server.test.js) | The HTTP API end to end against a real server on a random loopback port: add / rescan / rename / delete, persistence, and the file endpoint's refusal to read outside the project |
 

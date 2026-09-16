@@ -243,3 +243,106 @@ test("scanProject rejects a path that is not a directory", async () => {
   await assert.rejects(() => scanProject(`${root}/a.txt`), /Not a directory/);
   await removeProject(root);
 });
+
+// Authors are the one metadata dimension the UI filters on, and most of them are
+// inherited rather than declared, so pin down both halves.
+describe("author resolution", () => {
+  let root;
+  let scan;
+
+  before(async () => {
+    root = await makeProject({
+      "skills/plain/SKILL.md": `---
+name: plain-author
+description: Top-level author as a bare string.
+author: Ada Lovelace
+---
+`,
+      "skills/meta/SKILL.md": `---
+name: meta-author
+description: Author and email under metadata.
+metadata:
+  author: Ada Lovelace
+  email: ada@example.com
+---
+`,
+      "skills/object/SKILL.md": `---
+name: object-author
+description: Author as an object.
+author:
+  name: Ada Lovelace
+  email: ada@example.com
+---
+`,
+      // Plugin with an author; the skills below it do and do not declare their own.
+      "pkg/.claude-plugin/plugin.json": JSON.stringify({ name: "pkg-plugin", author: "Grace Hopper" }),
+      "pkg/skills/inherits/SKILL.md": `---
+name: inherits-author
+description: No author of its own.
+---
+`,
+      "pkg/skills/keeps/SKILL.md": `---
+name: keeps-own-author
+description: Declares its own author.
+author: Katherine Johnson
+---
+`,
+      // MCP server whose folder carries a package.json, plus a tool defined in it.
+      ".mcp.json": JSON.stringify({
+        mcpServers: { local: { command: "node", args: ["servers/local/index.js"] } },
+      }),
+      "servers/local/package.json": JSON.stringify({ name: "local", author: "Alan Turing" }),
+      "servers/local/index.js": `server.tool("local_thing", {});\n`,
+    });
+    scan = await scanProject(root);
+  });
+  after(() => removeProject(root));
+
+  test("reads a bare top-level author", () => {
+    assert.equal(byName(scan.categories.skills, "plain-author").meta.author, "Ada Lovelace");
+  });
+
+  test("combines metadata.author with metadata.email", () => {
+    assert.equal(byName(scan.categories.skills, "meta-author").meta.author, "Ada Lovelace <ada@example.com>");
+  });
+
+  test("accepts the object form and renders it the same way", () => {
+    assert.equal(byName(scan.categories.skills, "object-author").meta.author, "Ada Lovelace <ada@example.com>");
+  });
+
+  test("an item inside a plugin folder inherits the plugin's author", () => {
+    const s = byName(scan.categories.skills, "inherits-author");
+    assert.equal(s.meta.author, "Grace Hopper");
+    assert.equal(s.meta.authorSource, "plugin pkg-plugin");
+  });
+
+  test("inheritance never overwrites a declared author", () => {
+    const s = byName(scan.categories.skills, "keeps-own-author");
+    assert.equal(s.meta.author, "Katherine Johnson");
+    assert.equal(s.meta.authorSource, undefined);
+  });
+
+  test("an MCP server takes the author from a package manifest in its folder", () => {
+    const m = byName(scan.categories.mcp, "local");
+    assert.equal(m.meta.author, "Alan Turing");
+    assert.equal(m.meta.authorSource, "package manifest");
+  });
+
+  test("tools defined in the server's tree take the server's author", () => {
+    const t = byName(scan.categories.tools, "local_thing");
+    assert.ok(t, "local_thing not detected");
+    assert.equal(t.meta.author, "Alan Turing");
+    assert.equal(t.meta.authorSource, "MCP server local");
+  });
+
+  test("the graph carries the resolved author onto every node", () => {
+    const node = scan.graph.nodes.find((n) => n.name === "inherits-author");
+    assert.equal(node.author, "Grace Hopper");
+  });
+
+  test("two spellings of one person stay distinct, as the filter groups on the exact string", () => {
+    const authors = new Set(scan.categories.skills.map((s) => s.meta.author).filter(Boolean));
+    assert.ok(authors.has("Ada Lovelace"));
+    assert.ok(authors.has("Ada Lovelace <ada@example.com>"));
+  });
+});

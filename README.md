@@ -168,8 +168,8 @@ The app never pushes; the result shows the `git push` command to run.
 ## Tests
 
 ```bash
-npm test          # node --test, no extra dependencies
-npm test -- test/scanner.test.js   # one file
+npm test                          # node --test, no extra dependencies
+node --test test/scanner.test.js  # one file
 ```
 
 The suite uses the built-in Node test runner and runs in well under a second. Each test

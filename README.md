@@ -8,6 +8,11 @@ A Mac app (also runnable in a browser): add project folders, scan them, and brow
 everything AI‑agent related that they contain — skills, agents, MCP servers, tools,
 workflows and plugins — as a list, a layered flow diagram or a relationship graph.
 
+<img src="docs/network-graph.svg" alt="Relationship graph: a skill node connected to the built-in tools it uses, alongside unconnected workflow and plugin nodes" width="500">
+
+*The relationship graph, scanning this repo itself — a skill wired to the tools it's
+allowed to use, plus this project's own CI/release workflows and plugin.*
+
 It also **cuts plugin releases for you**. Pick a bump and it writes the new version to
 `plugin.json`, the marketplace listing, the `metadata.version` of every skill and agent in
 the plugin, the package manifests and the `CHANGELOG.md`, then optionally commits and tags

@@ -158,6 +158,53 @@ Unconnected nodes (typically permission rules) are hidden by default; toggle **s
 A plugin's version is scattered across several files that drift apart easily. Skill Atlas
 treats `plugin.json` as the source of truth and writes the rest for you in one action.
 
+### Skills and agents are versioned through their plugin
+
+There is no per-skill release button, and that is deliberate: a lone `SKILL.md` has nowhere
+to record a version that anything else agrees with. **Versioning follows
+[Claude's plugin standard](https://docs.claude.com/en/docs/claude-code/plugins)** — the
+**Version** action only appears on an item the scan identified as a plugin, meaning a folder
+with a `.claude-plugin/plugin.json` manifest. Skills and agents are then versioned *with*
+the plugin that contains them.
+
+So if you want your own skills and agents versioned, package them as a plugin. The minimum:
+
+```
+my-plugin/
+├── .claude-plugin/
+│   └── plugin.json        { "name": "my-plugin", "version": "0.1.0" }
+├── skills/
+│   └── my-skill/
+│       └── SKILL.md
+└── agents/
+    └── my-agent.md
+```
+
+Two things determine how much gets stamped:
+
+- **Location.** Only files under the plugin folder are touched. A skill left outside it
+  keeps whatever version it had. Agent files must sit under an `agents/` folder to be
+  picked up.
+- **A `metadata:` block.** Add one to each `SKILL.md` and agent you want stamped — the
+  release writes `version` into it, adding the key if it is missing. Files without a
+  `metadata:` block are skipped rather than rewritten.
+
+  ```markdown
+  ---
+  name: my-skill
+  description: What it does.
+  metadata:
+    version: 0.1.0
+    author: Your Name
+  ---
+  ```
+
+To publish the plugin to others, add a `marketplace.json` listing it; the release then keeps
+that entry's version in step too. See Anthropic's
+[plugins](https://docs.claude.com/en/docs/claude-code/plugins) and
+[Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) docs for the
+full spec.
+
 ### Where the version lives
 
 | Where | What it is | Updated by |

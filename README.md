@@ -193,6 +193,24 @@ version, model, licence or any other field. Picking an author narrows the list, 
 chips and both graph views at once. `All authors` clears it, and `No author` shows exactly
 the items that have none, which is the quickest way to find what still needs attributing.
 
+**It earns its keep on a shared repo.** Alone, you know who wrote what. With five people
+adding skills and agents to the same project — or publishing a plugin marketplace between
+them — the author field is what turns a growing pile of Markdown into something you can ask
+questions of:
+
+- *Who owns this?* Open a skill that is misbehaving and the detail panel names the person to
+  ask, instead of you guessing from `git log` on a file that has been moved twice.
+- *What did they add?* Filter to a teammate to review everything they contributed across
+  every category at once, in the list and in both graph views.
+- *What is unowned?* `No author` is the gap list. An unattributed skill is one nobody has
+  agreed to maintain, and it is much cheaper to notice that now than when it breaks.
+
+Because authors are inherited, a team does not have to annotate every file. Declare the
+author once in the plugin's `plugin.json` and everything inside it is attributed, then let
+individuals override it on the specific skills and agents they own. Agreeing on the format
+up front matters more than it looks — see
+[Keep the spelling identical](#keep-the-spelling-identical).
+
 ### How to define an author
 
 Declare it in frontmatter or a manifest, depending on the item:

@@ -280,12 +280,24 @@ plugin and let everything inside inherit it.
 
 Skill Atlas finds things by convention, so it ships those conventions as an installable
 Claude Code plugin rather than leaving you to copy a file. This repository is also a plugin
-marketplace:
+marketplace. Run both commands in an interactive Claude Code session — they are two separate
+steps:
 
 ```
 /plugin marketplace add SamYuen101234/skill-atlas
+```
+
+Clones this repo into `~/.claude/plugins/marketplaces/skill-atlas/` and registers the
+catalogue. It installs nothing on its own.
+
+```
 /plugin install skill-atlas-conventions@skill-atlas
 ```
+
+Installs the plugin into `~/.claude/plugins/cache`. If the summary says
+`Run /reload-plugins to activate.`, do that (or restart the session) before the skill is
+live. The `@skill-atlas` suffix is the marketplace's `name`, which happens to match the repo
+name here.
 
 Your agent then has the `authoring-skills` skill in every project, and reaches for it when
 you ask it to write a skill, add an agent, package something as a plugin, or work out why an

@@ -6,7 +6,39 @@
 A Mac app (also runnable in a browser): add project folders, scan them, and browse
 everything AI‑agent related that they contain — skills, agents, MCP servers, tools,
 workflows and plugins — as a list, a layered flow diagram or a relationship graph.
+
+It also **cuts plugin releases for you**. Pick a bump and it writes the new version to
+`plugin.json`, the marketplace listing, the `metadata.version` of every skill and agent in
+the plugin, the package manifests and the `CHANGELOG.md`, then optionally commits and tags
+the result — so those six places cannot drift apart. See
+[Plugin versioning](#plugin-versioning).
+
 Everything runs locally; nothing is uploaded anywhere.
+
+## Contents
+
+- [Install](#install)
+- [How it works](#how-it-works)
+- [What it finds](#what-it-finds)
+  - [Making your own workflow discoverable](#making-your-own-workflow-discoverable)
+- [Build from source](#build-from-source)
+- [Run in a browser](#run-in-a-browser)
+- [Relationship graph](#relationship-graph)
+- [Filtering by author](#filtering-by-author)
+  - [How to define an author](#how-to-define-an-author)
+  - [What gets an author without you writing one](#what-gets-an-author-without-you-writing-one)
+  - [Keep the spelling identical](#keep-the-spelling-identical)
+- [Plugin versioning](#plugin-versioning)
+  - [Skills and agents are versioned through their plugin](#skills-and-agents-are-versioned-through-their-plugin)
+  - [Where the version lives](#where-the-version-lives)
+  - [How to cut a release](#how-to-cut-a-release)
+  - [Keeping track](#keeping-track)
+  - [Git, and pushing](#git-and-pushing)
+  - [Automating it](#automating-it)
+- [Tests](#tests)
+- [Releasing a new version](#releasing-a-new-version)
+- [API](#api)
+- [Author](#author)
 
 ## Install
 

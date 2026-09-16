@@ -2,7 +2,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import yaml from "js-yaml";
+// Namespace import: js-yaml 5 is ESM with named exports and no default export.
+import * as yaml from "js-yaml";
 
 const IGNORE_DIRS = new Set([
   "node_modules", ".git", "dist", "build", "out", ".next", ".nuxt", ".turbo",

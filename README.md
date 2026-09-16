@@ -108,7 +108,7 @@ them, and writes one JSON file. Nothing leaves the machine.
 | Category  | Detected from |
 |-----------|---------------|
 | Skills    | `SKILL.md` files (Agent Skills spec), `.claude/commands/**/*.md` slash commands, `.cursor/rules/*.mdc` |
-| Agents    | Markdown files in `.claude/agents/`, `agents/`, `.agents/`, `.github/agents/`, `.cursor/agents/` (frontmatter: name, description, model, tools) |
+| Agents    | Markdown files in `.claude/agents/`, `agents/`, `.agents/`, `.github/agents/`, `.cursor/agents/` (frontmatter: name, description, model, tools); a root `AGENTS.md` (the cross-tool convention used by Codex, Cursor, Aider and others) |
 | MCP       | `.mcp.json`, `.claude/settings*.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`, `.claude-plugin/plugin.json`, `mcp.json`, `claude_desktop_config.json` |
 | Tools     | Tool definitions in source: MCP TS SDK `server.tool(...)`, Python `@mcp.tool` / `@tool`, LangChain `Tool(name=...)`, Anthropic/OpenAI tool schemas, Vercel AI SDK `tool({...})`, Go `mcp.NewTool`, Rust `#[tool]`; plus Claude Code permission rules and hooks in `.claude/settings*.json` |
 | Workflows | `WORKFLOW.md` or `workflow.yaml`/`workflow.json` manifests, script-workflow folders (see below), GitHub Actions, GitLab CI, `workflows/` folders (YAML, JSON, n8n exports), Prefect `@flow`, Airflow `@dag`, Temporal `@workflow.defn` |

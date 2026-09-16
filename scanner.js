@@ -213,16 +213,18 @@ async function scanAgents(root, files) {
     const r = rel(root, f);
     const lower = r.toLowerCase();
     if (!lower.endsWith(".md")) continue;
+    const base = path.basename(f);
+    const isAgentsMd = base.toUpperCase() === "AGENTS.MD";
     const inAgentsDir = /(^|\/)(\.claude\/agents|agents|\.agents|\.github\/agents|\.cursor\/agents)\//.test(lower);
-    if (!inAgentsDir) continue;
-    if (path.basename(f).toUpperCase() === "README.MD") continue;
+    if (!inAgentsDir && !isAgentsMd) continue;
+    if (!isAgentsMd && base.toUpperCase() === "README.MD") continue;
     const text = await readText(f);
     if (text == null) continue;
     const { data, body } = parseFrontmatter(text);
     items.push({
-      name: data.name || path.basename(f, ".md"),
-      description: data.description || firstParagraph(body),
-      kind: lower.includes(".claude/agents") ? "claude-agent" : "agent",
+      name: data.name || (isAgentsMd ? r : path.basename(f, ".md")),
+      description: data.description || firstParagraph(body) || (isAgentsMd ? "Project-wide instructions for AI coding agents." : undefined),
+      kind: isAgentsMd ? "agents-md" : lower.includes(".claude/agents") ? "claude-agent" : "agent",
       path: r,
       meta: {
         model: data.model,

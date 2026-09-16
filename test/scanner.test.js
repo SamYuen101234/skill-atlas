@@ -42,6 +42,7 @@ tools: [Read, Grep, deploy-service]
 ---
 `,
   "agents/README.md": "Not an agent, should be skipped.\n",
+  "AGENTS.md": "# Agent instructions\n\nRun `npm test` before committing.\n",
 
   // --- mcp ---
   ".mcp.json": JSON.stringify({
@@ -141,6 +142,13 @@ describe("scanProject", () => {
 
     test("skips README.md inside an agents folder", () => {
       assert.equal(scan.categories.agents.some((a) => /readme/i.test(a.name)), false);
+    });
+
+    test("picks up a root AGENTS.md as cross-tool project instructions", () => {
+      const a = byName(scan.categories.agents, "AGENTS.md");
+      assert.ok(a, "AGENTS.md not found");
+      assert.equal(a.kind, "agents-md");
+      assert.equal(a.description, "Run `npm test` before committing.");
     });
   });
 

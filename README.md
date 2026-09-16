@@ -26,6 +26,37 @@ launch. To open it:
 See [SIGNING.md](SIGNING.md) for how to produce a signed and notarized build that opens
 with a normal double-click.
 
+## How it works
+
+```mermaid
+flowchart TB
+    A["Project folder"] --> B["Walk the tree<br/>skips node_modules, .git, dist, .venv"]
+    B --> C["Six detectors, in parallel<br/>(see the table below)"]
+
+    C --> D1["Skills"]
+    C --> D2["Agents"]
+    C --> D3["MCP servers"]
+    C --> D4["Tools"]
+    C --> D5["Workflows"]
+    C --> D6["Plugins"]
+
+    D1 --> E["Author inheritance"]
+    D2 --> E
+    D3 --> E
+    D4 --> E
+    D5 --> E
+    D6 --> E
+
+    E --> F["Build the graph<br/>uses · provides · references · contains · mirror"]
+    F --> G[("projects.json")]
+    G --> H["List"]
+    G --> I["Flow diagram"]
+    G --> J["Network graph"]
+```
+
+The scan is read-only and entirely local: it reads files, resolves references between
+them, and writes one JSON file. Nothing leaves the machine.
+
 ## What it finds
 
 | Category  | Detected from |
@@ -134,6 +165,40 @@ Open a plugin card and press **Version** to cut a release. The dialog shows the 
 
 The app never pushes; the result shows the `git push` command to run.
 
+## Releasing a new version
+
+This is the app's own release process. (For versioning a *plugin you found with the app*,
+see [Plugin versioning](#plugin-versioning) above — a different thing entirely.)
+
+1. Make sure the working tree is clean, then bump the version:
+
+   ```bash
+   npm version patch     # 0.1.0 -> 0.1.1   (minor / major also work)
+   ```
+
+   That rewrites `package.json`, commits it, and creates a matching `v0.1.1` tag.
+
+2. Push the commit and the tag:
+
+   ```bash
+   git push && git push --tags
+   ```
+
+3. The `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml),
+   which builds `arm64` and `x64` on a macOS runner and attaches the `.dmg` and `.zip`
+   files to a new GitHub Release. It signs and notarizes them when the Apple secrets from
+   [SIGNING.md](SIGNING.md) are set on the repository, and ships unsigned builds otherwise.
+
+To publish from your own Mac instead of CI:
+
+```bash
+npm run dist
+gh release create v0.1.1 release/*.dmg --generate-notes
+```
+
+Version numbers follow semver: patch for fixes, minor for new detectors or views, major
+for a change that invalidates an existing `projects.json`.
+
 ## API
 
 | Method | Path | Purpose |
@@ -146,3 +211,10 @@ The app never pushes; the result shows the `git push` command to run.
 | DELETE | `/api/projects/:id` | Remove from list |
 | GET    | `/api/projects/:id/file?path=` | Read a file inside the project |
 | POST   | `/api/pick-folder` | Native folder picker (macOS) |
+
+## Author
+
+**Sam Yuen** — [@SamYuen101234](https://github.com/SamYuen101234)
+
+Released under the [MIT License](LICENSE). Issues and pull requests are welcome at
+[SamYuen101234/skill-atlas](https://github.com/SamYuen101234/skill-atlas).

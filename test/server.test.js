@@ -33,6 +33,8 @@ describe("HTTP API", () => {
 
   before(async () => {
     dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "skill-atlas-data-"));
+    // Without this the suite would scan the real ~/.claude of whoever runs it.
+    process.env.CLAUDE_CONFIG_DIR = path.join(dataDir, "no-such-config");
     projectRoot = await makeProject(FIXTURE);
     // Port 0: let the OS pick, exactly as the Electron shell does.
     const started = await startServer({ dataDir, port: 0, host: "127.0.0.1" });
@@ -41,6 +43,7 @@ describe("HTTP API", () => {
   });
 
   after(async () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
     await new Promise((r) => server.close(r));
     await removeProject(projectRoot);
     await fs.rm(dataDir, { recursive: true, force: true });
@@ -245,7 +248,7 @@ describe("HTTP API", () => {
     });
 
     after(async () => {
-      delete process.env.CLAUDE_CONFIG_DIR;
+      process.env.CLAUDE_CONFIG_DIR = path.join(dataDir, "no-such-config");
       await removeProject(fakeHome);
     });
 
@@ -326,5 +329,115 @@ describe("HTTP API", () => {
     const res = await fetch(`${base}/`);
     assert.equal(res.status, 200);
     assert.match(await res.text(), /Skill Atlas/);
+  });
+});
+// Its own server and data dir: the "removed on purpose" flag is persistent, so these
+// cases cannot share state with each other or with the suite above.
+describe("global config auto-add", () => {
+  let server, base, dataDir, fakeHome;
+
+  const api = async (method, urlPath, body) => {
+    const res = await fetch(`${base}${urlPath}`, {
+      method,
+      headers: body ? { "content-type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null };
+  };
+
+  const start = async () => {
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "skill-atlas-auto-"));
+    const started = await startServer({ dataDir, port: 0, host: "127.0.0.1" });
+    server = started.server;
+    base = `http://${started.host}:${started.port}`;
+  };
+
+  before(async () => {
+    fakeHome = await makeProject({
+      ".claude/skills/auto/SKILL.md": "---\nname: auto\ndescription: A user-level skill.\n---\n",
+    });
+    process.env.CLAUDE_CONFIG_DIR = path.join(fakeHome, ".claude");
+    await start();
+  });
+
+  after(async () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    await new Promise((r) => server.close(r));
+    await removeProject(fakeHome);
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  test("appears in the list without anyone asking for it", async () => {
+    const { body } = await api("GET", "/api/projects");
+    assert.equal(body.length, 1);
+    assert.equal(body[0].global, true);
+    assert.equal(body[0].counts.skills, 1, "it should arrive already scanned");
+  });
+
+  test("is added at most once, however often the list is fetched", async () => {
+    await api("GET", "/api/projects");
+    const { body } = await api("GET", "/api/projects");
+    assert.equal(body.filter((p) => p.global).length, 1);
+  });
+
+  test("keeps its id across listings, so a selected entry does not move", async () => {
+    const first = (await api("GET", "/api/projects")).body[0].id;
+    assert.equal((await api("GET", "/api/projects")).body[0].id, first);
+  });
+
+  test("sits at the top of the list", async () => {
+    await api("POST", "/api/projects", { path: fakeHome });
+    const { body } = await api("GET", "/api/projects");
+    assert.equal(body[0].global, true);
+    assert.equal(body.length, 2);
+  });
+
+  test("stays gone once removed, instead of coming back on the next listing", async () => {
+    const g = (await api("GET", "/api/projects")).body.find((p) => p.global);
+    assert.equal((await api("DELETE", `/api/projects/${g.id}`)).status, 204);
+    const { body } = await api("GET", "/api/projects");
+    assert.equal(body.filter((p) => p.global).length, 0);
+  });
+
+  test("the removal survives a restart", async () => {
+    await new Promise((r) => server.close(r));
+    const started = await startServer({ dataDir, port: 0, host: "127.0.0.1" });
+    server = started.server;
+    base = `http://${started.host}:${started.port}`;
+    const { body } = await api("GET", "/api/projects");
+    assert.equal(body.filter((p) => p.global).length, 0, "a removed entry must not reappear");
+  });
+
+  test("asking for it explicitly brings it back", async () => {
+    const { status, body } = await api("POST", "/api/global");
+    assert.equal(status, 201);
+    assert.equal(body.global, true);
+    const list = (await api("GET", "/api/projects")).body;
+    assert.equal(list.filter((p) => p.global).length, 1);
+  });
+});
+
+describe("global config auto-add with no config folder", () => {
+  let server, base, dataDir;
+
+  before(async () => {
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "skill-atlas-auto-none-"));
+    process.env.CLAUDE_CONFIG_DIR = path.join(dataDir, "absent");
+    const started = await startServer({ dataDir, port: 0, host: "127.0.0.1" });
+    server = started.server;
+    base = `http://${started.host}:${started.port}`;
+  });
+
+  after(async () => {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    await new Promise((r) => server.close(r));
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  test("adds nothing, and does not wedge the listing", async () => {
+    const res = await fetch(`${base}/api/projects`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), []);
   });
 });

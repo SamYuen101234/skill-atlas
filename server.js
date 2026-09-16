@@ -113,7 +113,11 @@ async function runScan(p) {
 }
 
 // ---------- routes ----------
-app.get("/api/projects", (_req, res) => {
+app.get("/api/projects", async (_req, res) => {
+  // The user-level config applies to every project, so it belongs in the list without
+  // anyone having to ask for it. Once the entry exists this is a no-op, and removing it
+  // is remembered, so it is added at most once.
+  if (!db.globalDismissed) await ensureGlobalProject();
   res.json(db.projects.map(summary));
 });
 
@@ -145,8 +149,36 @@ app.post("/api/projects", async (req, res) => {
   res.status(201).json(summary(project));
 });
 
+// Add the user-level config as a project entry, scanned, at the top of the list. Returns
+// the existing entry if there is one, or null when there is no config folder to scan.
+async function ensureGlobalProject() {
+  const existing = db.projects.find((p) => p.global);
+  if (existing) return existing;
+  const dir = globalConfigDir();
+  try {
+    if (!(await fs.stat(dir)).isDirectory()) return null;
+  } catch {
+    return null;
+  }
+  const project = {
+    id: crypto.randomUUID().slice(0, 8),
+    name: "Global config",
+    path: path.dirname(dir),
+    global: true,
+    dir,
+    addedAt: new Date().toISOString(),
+    scan: null,
+    error: null,
+  };
+  db.projects.unshift(project);
+  await runScan(project);
+  return project;
+}
+
 // Add (or refresh) the user-level config as a project: the skills, agents, commands,
-// plugins and MCP servers in ~/.claude that apply to every project.
+// plugins and MCP servers in ~/.claude that apply to every project. Unlike the automatic
+// add in GET /api/projects, asking for it explicitly reports why it could not be done,
+// and undoes an earlier Remove.
 app.post("/api/global", async (_req, res) => {
   const dir = globalConfigDir();
   try {
@@ -155,25 +187,15 @@ app.post("/api/global", async (_req, res) => {
   } catch {
     return res.status(404).json({ error: `No global config folder at ${dir}` });
   }
-  let project = db.projects.find((p) => p.global);
-  const existed = !!project;
-  if (!project) {
-    project = {
-      id: crypto.randomUUID().slice(0, 8),
-      name: "Global config",
-      path: path.dirname(dir),
-      global: true,
-      dir,
-      addedAt: new Date().toISOString(),
-      scan: null,
-      error: null,
-    };
-    db.projects.unshift(project);
-  } else {
-    project.dir = dir;
+  delete db.globalDismissed;
+  const existing = db.projects.find((p) => p.global);
+  if (existing) {
+    existing.dir = dir;
+    await runScan(existing);
+    return res.json({ ...summary(existing), existed: true });
   }
-  await runScan(project);
-  res.status(existed ? 200 : 201).json({ ...summary(project), existed });
+  const project = await ensureGlobalProject();
+  res.status(201).json({ ...summary(project), existed: false });
 });
 
 app.get("/api/projects/:id", (req, res) => {
@@ -236,6 +258,8 @@ app.post("/api/projects/:id/version", async (req, res) => {
 app.delete("/api/projects/:id", async (req, res) => {
   const idx = db.projects.findIndex((p) => p.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
+  // Remember a removed global entry, or the next listing would put it straight back.
+  if (db.projects[idx].global) db.globalDismissed = true;
   db.projects.splice(idx, 1);
   await saveDb();
   res.status(204).end();

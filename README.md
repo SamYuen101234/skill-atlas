@@ -151,10 +151,13 @@ Folders such as `node_modules`, `.git`, `dist`, `.venv` are skipped.
 
 Not everything lives in a project. Skills you wrote for yourself, agents you reuse
 everywhere, marketplace plugins you installed and user-scope MCP servers all sit in
-`~/.claude` and apply to every repo you open. **Global** in the sidebar (⌘G in the app,
-`POST /api/global`) scans that folder and adds it to the list as an entry named *Global
-config*, marked with a `global` badge. It behaves like any other project: same categories,
-same graph, same search, same Rescan.
+`~/.claude` and apply to every repo you open, so the app lists them without being asked:
+if that folder exists, an entry named *Global config* appears at the top of the sidebar
+with a `global` badge, already scanned. It behaves like any other project — same
+categories, same graph, same search, same Rescan.
+
+Remove it and it stays removed; the listing will not put it back. **Global** in the sidebar
+(⌘G in the app, `POST /api/global`) rescans it, and brings it back after a Remove.
 
 What it covers:
 

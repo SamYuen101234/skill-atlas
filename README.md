@@ -155,15 +155,107 @@ Unconnected nodes (typically permission rules) are hidden by default; toggle **s
 
 ## Plugin versioning
 
-Open a plugin card and press **Version** to cut a release. The dialog shows the current version (and whether the marketplace listing agrees), the last git tag for that plugin, and every file in the plugin folder changed since it. Pick patch / minor / major or type a version, write a changelog entry (pre-filled with the changed skills and agents), and choose what to update:
+A plugin's version is scattered across several files that drift apart easily. Skill Atlas
+treats `plugin.json` as the source of truth and writes the rest for you in one action.
 
-- `plugin.json` and the plugin's entry in `marketplace.json` (always)
-- `metadata.version` in every SKILL.md and agent file that has a `metadata` block
-- `pyproject.toml` / `package.json` inside the plugin
-- `CHANGELOG.md` in the plugin folder (created if missing, new section prepended)
-- optionally a git commit of exactly those files and an annotated tag `<plugin>-v<version>`
+### Where the version lives
 
-The app never pushes; the result shows the `git push` command to run.
+| Where | What it is | Updated by |
+|-------|------------|------------|
+| `<plugin>/.claude-plugin/plugin.json` → `version` | **The source of truth.** Everything else is derived from it. | Always |
+| `marketplace.json` → the entry whose `name` matches the plugin | What people installing from your marketplace actually see | Always, when the plugin is listed in one |
+| `metadata.version` in each `SKILL.md` and agent `.md` | Per-file stamp, so a skill copied out of the plugin still says where it came from | Checkbox, on by default |
+| `pyproject.toml` / `package.json` inside the plugin folder | The packaging version, if the plugin ships code | Checkbox, on by default |
+| `<plugin>/CHANGELOG.md` | The human history | Always — created if missing |
+| Git tag `<plugin-name>-v<version>` | The immutable marker used to diff the next release | Checkbox, off by default |
+
+Only files **inside the plugin folder** are touched, plus the `marketplace.json` that lists
+it. A skill with no `metadata:` block is left alone rather than having one inserted.
+
+### How to cut a release
+
+1. Open the plugin's card and press **Version**, or use **File → Release Plugin…** (⇧⌘R).
+   With several plugins in the project you get a picker first.
+2. The dialog opens on the current state — see [Keeping track](#keeping-track) below for
+   what it shows you.
+3. Pick the bump. The resulting number is previewed next to each choice:
+
+   | Bump | Use it for |
+   |------|-----------|
+   | **Patch** | wording tweaks, fixes |
+   | **Minor** | a new skill, agent or tool |
+   | **Major** | a breaking change to how a skill is called |
+   | **Custom** | type an exact `1.2.3` — anything that is not semver is rejected before a single file is written |
+
+4. Write the changelog entry. It is pre-filled with the skills and agents that changed
+   since the last tag; leaving it empty records `- No notes.`
+5. Tick what to write. The two version checkboxes are on by default, and greyed out when
+   the plugin has nothing of that kind — no `metadata:` blocks, no package manifests.
+   **Git commit** and **Git tag** are off by default, and unavailable outside a git repo.
+6. Press **Write files**. The response lists every path written, and the project is
+   rescanned immediately so the cards show the new version.
+
+The new `CHANGELOG.md` section is prepended under the `# Changelog` heading, newest first:
+
+```markdown
+## 0.4.0 - 2026-09-16
+
+- Added the deploy-service skill.
+```
+
+### Keeping track
+
+The dialog is also the status view — open it just to look, and cancel:
+
+- **Current** — the version in `plugin.json`, with the `marketplace.json` version beneath
+  it. When they disagree you have found drift: a previous release that only half-applied.
+- **Last tag** — the most recent `<plugin>-v*` tag, plus the current branch and how many
+  files in the plugin folder are uncommitted. The tag is what "changed since" is measured
+  against; it reads `none` for a plugin you have never tagged.
+- **Changed since last release** — every file in the plugin folder touched since that tag,
+  including uncommitted edits. An empty list means there is nothing to release; a long one
+  usually means a bump is overdue.
+
+Over time the git tags are the audit trail: `git tag --list '<plugin-name>-v*'` gives the
+release history, and `git diff <plugin>-v0.3.0..<plugin>-v0.4.0 -- <plugin-dir>` shows
+exactly what shipped between two of them.
+
+### Git, and pushing
+
+**The app never pushes.** With **Git commit** ticked it stages exactly the files it wrote
+and commits them as `<plugin> v<version>`; with **Git tag** ticked it adds an annotated
+`<plugin>-v<version>`. The result then shows the command to run yourself:
+
+```bash
+git push origin main <plugin-name>-v0.4.0
+```
+
+Outside a git repository the two options are greyed out in the dialog (and report
+`Not a git repository` if you drive the API directly); the files are still written either way.
+
+### Automating it
+
+The same two operations are on the HTTP API, so a script can do the bump:
+
+```bash
+# inspect
+curl "localhost:3210/api/projects/$ID/version?plugin=pkg/.claude-plugin/plugin.json&listedIn=.claude-plugin/marketplace.json"
+
+# write
+curl -X POST localhost:3210/api/projects/$ID/version \
+  -H 'content-type: application/json' \
+  -d '{"pluginPath":"pkg/.claude-plugin/plugin.json",
+       "listedIn":".claude-plugin/marketplace.json",
+       "version":"0.4.0",
+       "changelog":"- Added the deploy-service skill.",
+       "updateFileVersions":true,
+       "updateManifests":true,
+       "commit":false,
+       "tag":false}'
+```
+
+> This versions **a plugin the app found in one of your projects**. For releasing Skill
+> Atlas itself, see [Releasing a new version](#releasing-a-new-version).
 
 ## Tests
 

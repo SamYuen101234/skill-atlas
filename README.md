@@ -165,6 +165,27 @@ Open a plugin card and press **Version** to cut a release. The dialog shows the 
 
 The app never pushes; the result shows the `git push` command to run.
 
+## Tests
+
+```bash
+npm test          # node --test, no extra dependencies
+npm test -- test/scanner.test.js   # one file
+```
+
+The suite uses the built-in Node test runner and runs in well under a second. Each test
+builds a throwaway project tree in a temp directory (see [test/helpers.js](test/helpers.js))
+and asserts against a real scan, so there is nothing to keep in sync with fixtures
+checked into the repo.
+
+| File | Covers |
+|------|--------|
+| [test/scanner.test.js](test/scanner.test.js) | Every detector (skills, slash commands, cursor rules, agents, MCP servers, tools, workflows, plugins), the graph edges between them, and the ignore rules |
+| [test/versioning.test.js](test/versioning.test.js) | `nextVersion` semver maths, `versionInfo` reporting, and what `bumpVersion` writes — plugin.json, marketplace entry, frontmatter, manifests, CHANGELOG — plus its path-containment and semver guards |
+| [test/server.test.js](test/server.test.js) | The HTTP API end to end against a real server on a random loopback port: add / rescan / rename / delete, persistence, and the file endpoint's refusal to read outside the project |
+
+[CI](.github/workflows/ci.yml) runs them on macOS and Linux against Node 20 and 22, and
+a release build will not start unless they pass.
+
 ## Releasing a new version
 
 This is the app's own release process. (For versioning a *plugin you found with the app*,

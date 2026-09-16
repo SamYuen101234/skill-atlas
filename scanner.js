@@ -312,7 +312,9 @@ async function scanTools(root, files) {
     if (/\.(test|spec)\.[jt]sx?$/.test(r) || /(^|\/)tests?\//.test(r)) continue;
     const text = await readText(f);
     if (text == null) continue;
-    if (!/\btool\b/i.test(text)) continue;
+    // Cheap prefilter before the regex battery. Substring, not \btool\b: that missed
+    // Go's mcp.NewTool( and any file whose only marker is the plural "Tools".
+    if (!/tool/i.test(text)) continue;
     for (const { re, kind } of TOOL_PATTERNS) {
       re.lastIndex = 0;
       let m;

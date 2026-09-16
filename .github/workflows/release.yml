@@ -20,6 +20,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm test
       - name: Build (signed + notarized when the Apple secrets are set, unsigned otherwise)
         # The secrets are read into differently named variables and only exported when
         # non-empty: an empty CSC_LINK makes electron-builder treat "" as a certificate

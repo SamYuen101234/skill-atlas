@@ -26,7 +26,8 @@ npm run dist       # build the .dmg for both architectures
 
 ## Writing skills, agents or plugins
 
-Use the `authoring-skills` skill in `.claude/skills/`. Short version: package them as a
+Use the `authoring-skills` skill in `plugins/skill-atlas-conventions/` (symlinked into
+`.claude/skills/` so it loads while working here; published via the repo's marketplace). Short version: package them as a
 plugin, set `name` and `description` explicitly, give every skill and agent a `metadata`
 block, declare `author` once on the plugin, and never hand-edit a version number — the
 app's **Version** action writes all six places at once.

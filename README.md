@@ -34,6 +34,7 @@ Everything runs locally; nothing is uploaded anywhere.
   - [How to define an author](#how-to-define-an-author)
   - [What gets an author without you writing one](#what-gets-an-author-without-you-writing-one)
   - [Keep the spelling identical](#keep-the-spelling-identical)
+- [Conventions plugin](#conventions-plugin)
 - [Plugin versioning](#plugin-versioning)
   - [Skills and agents are versioned through their plugin](#skills-and-agents-are-versioned-through-their-plugin)
   - [Where the version lives](#where-the-version-lives)
@@ -149,8 +150,7 @@ npm run dist       # release/Skill Atlas-<version>-<arch>.dmg + .zip
 ```
 
 Working on this repo with a coding agent? [CLAUDE.md](CLAUDE.md) holds the project
-conventions, and the `authoring-skills` skill in `.claude/skills/` carries the full rules for
-writing skills, agents and plugins that this app can index.
+conventions, and the [conventions plugin](#conventions-plugin) carries the authoring rules.
 
 The app runs the same local server on a random loopback port and shows the UI in a native window with a menu: **File → Add Project** (⌘O), **Rescan** (⌘R), **Release Plugin** (⇧⌘R), **View → List / Flow / Network** (⌘1 / ⌘2 / ⌘3), **Search** (⌘F). Folder picking and "Open" / "Finder" use native dialogs. Project data lives in `~/Library/Application Support/Skill Atlas/data/projects.json`; the first launch from a source checkout copies the browser-mode list from `./data/` if present.
 
@@ -275,6 +275,27 @@ display. So `Ada Lovelace` and `Ada Lovelace <ada@example.com>` are two separate
 that both read "Ada Lovelace" in the menu, and picking one hides the other's items. Pick one
 form per person and stay with it — the surest way is to declare the author once on the
 plugin and let everything inside inherit it.
+
+## Conventions plugin
+
+Skill Atlas finds things by convention, so it ships those conventions as an installable
+Claude Code plugin rather than leaving you to copy a file. This repository is also a plugin
+marketplace:
+
+```
+/plugin marketplace add SamYuen101234/skill-atlas
+/plugin install skill-atlas-conventions@skill-atlas
+```
+
+Your agent then has the `authoring-skills` skill in every project, and reaches for it when
+you ask it to write a skill, add an agent, package something as a plugin, or work out why an
+item is missing from a scan or showing **No author**. It covers the plugin layout, the
+frontmatter each kind of item needs, author inheritance, graph roles, and the two mistakes
+that quietly cost you attribution. Update it later with `/plugin update`.
+
+The plugin lives in [plugins/skill-atlas-conventions](plugins/skill-atlas-conventions) and is
+written to its own standard, so the scanner indexes it like any other — authored, versioned,
+and released through the flow it documents.
 
 ## Plugin versioning
 

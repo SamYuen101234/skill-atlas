@@ -1,6 +1,6 @@
 {
   "name": "skill-atlas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Add projects and scan them for skills, agents, MCP servers, tools and workflows",
   "main": "main.js",
   "author": "Sam Yuen",

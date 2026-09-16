@@ -13,6 +13,12 @@ the plugin, the package manifests and the `CHANGELOG.md`, then optionally commit
 the result — so those six places cannot drift apart. See
 [Plugin versioning](#plugin-versioning).
 
+And it is **built for sharing work across a team**. Every skill, agent and tool carries an
+`author`, inherited from the plugin that contains it so nobody has to annotate each file.
+One dropdown then filters the list and both graphs by person: who owns this skill, what a
+teammate has contributed, and — via `No author` — what is unattributed and therefore
+unmaintained. See [Filtering by author](#filtering-by-author).
+
 Everything runs locally; nothing is uploaded anywhere.
 
 ## Contents

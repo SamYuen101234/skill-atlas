@@ -115,6 +115,33 @@ describe("versionInfo", () => {
       await removeProject(root);
     }
   });
+
+  test("rejects a manifest reached through a symlink that leaves the project", async () => {
+    const root = await makeProject(PLUGIN);
+    const outside = await makeProject({ "ext/.claude-plugin/plugin.json": JSON.stringify({ name: "ext", version: "1.0.0" }) });
+    try {
+      await fs.symlink(path.join(outside, "ext"), path.join(root, "linked"));
+      await assert.rejects(
+        () => versionInfo(root, "linked/.claude-plugin/plugin.json"),
+        /Path outside project/);
+    } finally {
+      await removeProject(root);
+      await removeProject(outside);
+    }
+  });
+
+  // The name becomes a git tag prefix and a describe pattern, so it must not look like an option.
+  test("rejects a plugin name that could be parsed as a git option", async () => {
+    const root = await makeProject({
+      ...PLUGIN,
+      "pkg/.claude-plugin/plugin.json": JSON.stringify({ name: "--delete", version: "0.3.0" }) + "\n",
+    });
+    try {
+      await assert.rejects(() => versionInfo(root, "pkg/.claude-plugin/plugin.json"), /Plugin name/);
+    } finally {
+      await removeProject(root);
+    }
+  });
 });
 
 describe("bumpVersion", () => {

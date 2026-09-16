@@ -77,8 +77,13 @@ function createWindow() {
     },
   });
   win.loadURL(baseUrl);
-  // External links open in the default browser, never inside the app window.
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
+  // External links open in the default browser, never inside the app window. Only web
+  // URLs are handed to the OS: file:, custom schemes etc. from a compromised page are dropped.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (ev, url) => { if (!url.startsWith(baseUrl)) ev.preventDefault(); });
   win.on("closed", () => { win = null; });
 }
 
@@ -106,8 +111,6 @@ app.whenReady().then(async () => {
     const r = await dialog.showOpenDialog(win, { title: "Select a project folder", properties: ["openDirectory", "createDirectory"] });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle("open-path", (_e, p) => shell.openPath(String(p)));
-  ipcMain.handle("reveal-path", (_e, p) => { shell.showItemInFolder(String(p)); return true; });
 
   buildMenu();
   createWindow();

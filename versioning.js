@@ -29,10 +29,23 @@ export function nextVersion(current, bump) {
   return null;
 }
 
-function assertInside(root, relPath) {
+// Lexical containment check, then a symlink-aware one for files that already exist.
+async function assertInside(root, relPath) {
   const abs = path.resolve(root, relPath);
   if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error("Path outside project");
+  try {
+    const [real, realRoot] = await Promise.all([fs.realpath(abs), fs.realpath(root)]);
+    if (real !== realRoot && !real.startsWith(realRoot + path.sep)) throw new Error("Path outside project");
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
+  }
   return abs;
+}
+
+// Plugin names end up in git tag names and describe patterns; keep them to safe characters.
+function assertSafeName(name) {
+  if (typeof name !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) throw new Error("Plugin name must be alphanumeric with . _ - and not start with a symbol");
+  return name;
 }
 
 async function readJson(abs) {
@@ -84,16 +97,17 @@ function setFrontmatterVersion(text, version) {
 }
 
 export async function versionInfo(root, pluginRel, listedInRel) {
-  const pluginAbs = assertInside(root, pluginRel);
+  const pluginAbs = await assertInside(root, pluginRel);
   if (!pluginRel.endsWith(".claude-plugin/plugin.json")) throw new Error("Not a plugin manifest");
   const plugin = await readJson(pluginAbs);
+  assertSafeName(plugin.name);
   const pluginDirAbs = path.dirname(path.dirname(pluginAbs));
   const pluginDirRel = path.relative(root, pluginDirAbs).split(path.sep).join("/");
 
   let marketplaceVersion = null;
   if (listedInRel) {
     try {
-      const mk = await readJson(assertInside(root, listedInRel));
+      const mk = await readJson(await assertInside(root, listedInRel));
       marketplaceVersion = (mk.plugins || []).find((p) => p.name === plugin.name)?.version ?? null;
     } catch { /* ignore */ }
   }
@@ -117,7 +131,7 @@ export async function versionInfo(root, pluginRel, listedInRel) {
   if (inside.ok) {
     gitInfo.available = true;
     const tagPrefix = `${plugin.name}-v`;
-    const tag = await git(root, ["describe", "--tags", "--match", `${tagPrefix}*`, "--abbrev=0"]);
+    const tag = await git(root, ["describe", "--tags", `--match=${tagPrefix}*`, "--abbrev=0"]);
     gitInfo.lastTag = tag.ok ? tag.out : null;
     gitInfo.tagPrefix = tagPrefix;
     const changed = new Set();
@@ -155,7 +169,7 @@ export async function bumpVersion(root, opts) {
   if (!parseSemver(version)) throw new Error("Version must look like 1.2.3");
   const info = await versionInfo(root, pluginPath, listedIn);
   const written = [];
-  const pluginAbs = assertInside(root, pluginPath);
+  const pluginAbs = await assertInside(root, pluginPath);
   const pluginDirAbs = path.dirname(path.dirname(pluginAbs));
 
   // plugin.json
@@ -166,7 +180,7 @@ export async function bumpVersion(root, opts) {
 
   // marketplace.json entry
   if (listedIn) {
-    const mkAbs = assertInside(root, listedIn);
+    const mkAbs = await assertInside(root, listedIn);
     const mk = await readJson(mkAbs);
     const entry = (mk.plugins || []).find((p) => p.name === plugin.name);
     if (entry) {
@@ -180,7 +194,7 @@ export async function bumpVersion(root, opts) {
   if (updateFileVersions) {
     for (const f of info.files) {
       if (!f.hasMetadata) continue;
-      const abs = assertInside(root, f.path);
+      const abs = await assertInside(root, f.path);
       const text = await fs.readFile(abs, "utf8");
       const next = setFrontmatterVersion(text, version);
       if (next && next !== text) { await fs.writeFile(abs, next); written.push(f.path); }
@@ -190,7 +204,7 @@ export async function bumpVersion(root, opts) {
   // pyproject.toml / package.json inside the plugin
   if (updateManifests) {
     for (const m of info.manifests) {
-      const abs = assertInside(root, m.path);
+      const abs = await assertInside(root, m.path);
       const text = await fs.readFile(abs, "utf8");
       let next;
       if (path.basename(abs) === "package.json") {
@@ -224,7 +238,7 @@ export async function bumpVersion(root, opts) {
       result.git.commit = c;
     }
     if (tag) {
-      const t = await git(root, ["tag", "-a", tagName, "-m", `${plugin.name} v${version}`]);
+      const t = await git(root, ["tag", "-a", "-m", `${plugin.name} v${version}`, "--", tagName]);
       result.git.tag = { ...t, name: tagName };
     }
     result.git.hint = `git push origin ${info.git.branch || "HEAD"}${tag ? ` ${tagName}` : ""}`;

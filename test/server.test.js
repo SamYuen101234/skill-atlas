@@ -1,9 +1,10 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import http from "node:http";
 import path from "node:path";
 import os from "node:os";
-import { startServer } from "../server.js";
+import { startServer, isLoopbackHost } from "../server.js";
 import { makeProject, removeProject } from "./helpers.js";
 
 const FIXTURE = {
@@ -59,6 +60,61 @@ describe("HTTP API", () => {
 
   test("binds to loopback only", () => {
     assert.equal(server.address().address, "127.0.0.1");
+  });
+
+  describe("Host header allowlist (DNS rebinding)", () => {
+    // A page on evil.example whose DNS record flips to 127.0.0.1 reaches this port with
+    // its own domain in the Host header. Nothing should be served to it.
+    // fetch() silently replaces a custom Host header, so go through node:http.
+    const withHost = (host, method, urlPath, body) => new Promise((resolve, reject) => {
+      const url = new URL(base);
+      const payload = body ? JSON.stringify(body) : null;
+      const req = http.request({
+        hostname: url.hostname, port: url.port, method, path: urlPath,
+        headers: { host, ...(payload ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } : {}) },
+      }, (res) => {
+        let text = "";
+        res.on("data", (c) => (text += c));
+        res.on("end", () => resolve({ status: res.statusCode, text }));
+      });
+      req.on("error", reject);
+      if (payload) req.write(payload);
+      req.end();
+    });
+
+    test("refuses API reads addressed to a foreign host", async () => {
+      const { status, text } = await withHost("evil.example:3210", "GET", "/api/projects");
+      assert.equal(status, 403);
+      assert.match(JSON.parse(text).error, /localhost/);
+    });
+
+    test("refuses API writes addressed to a foreign host", async () => {
+      const { status } = await withHost("evil.example:3210", "POST", "/api/projects", { path: projectRoot });
+      assert.equal(status, 403);
+      const { body } = await api("GET", "/api/projects");
+      assert.equal(body.length, 0, "the project must not have been added");
+    });
+
+    test("refuses to serve the UI to a foreign host", async () => {
+      const { status } = await withHost("evil.example", "GET", "/");
+      assert.equal(status, 403);
+    });
+
+    test("still serves loopback hosts", async () => {
+      for (const host of ["localhost:3210", "127.0.0.1:3210", "[::1]:3210", "LOCALHOST"]) {
+        const { status } = await withHost(host, "GET", "/api/projects");
+        assert.equal(status, 200, `expected 200 for Host: ${host}`);
+      }
+    });
+
+    test("isLoopbackHost", () => {
+      for (const ok of ["localhost", "localhost:3210", "127.0.0.1", "127.0.0.1:65535", "[::1]", "[::1]:3210"]) {
+        assert.equal(isLoopbackHost(ok), true, ok);
+      }
+      for (const bad of ["", undefined, "evil.example", "evil.example:3210", "localhost.evil.example", "127.0.0.1.evil.example", "127.0.0.2", "[::2]:3210", "10.0.0.1:3210"]) {
+        assert.equal(isLoopbackHost(bad), false, String(bad));
+      }
+    });
   });
 
   test("starts with no projects", async () => {
@@ -148,6 +204,25 @@ describe("HTTP API", () => {
         assert.match(body.error, /Invalid path/);
       });
     }
+
+    test("refuses to follow a symlink that points outside the project", async () => {
+      const p = await addFixture();
+      const outside = await fs.mkdtemp(path.join(os.tmpdir(), "skill-atlas-outside-"));
+      await fs.writeFile(path.join(outside, "secret.txt"), "outside\n");
+      await fs.symlink(path.join(outside, "secret.txt"), path.join(projectRoot, "link.txt"));
+      await fs.symlink(outside, path.join(projectRoot, "linkdir"));
+      try {
+        for (const attempt of ["link.txt", "linkdir/secret.txt"]) {
+          const { status, body } = await api("GET", `/api/projects/${p.id}/file?path=${encodeURIComponent(attempt)}`);
+          assert.equal(status, 400, `expected 400 for ${attempt}`);
+          assert.match(body.error, /Invalid path/);
+        }
+      } finally {
+        await fs.rm(path.join(projectRoot, "link.txt"), { force: true });
+        await fs.rm(path.join(projectRoot, "linkdir"), { force: true });
+        await fs.rm(outside, { recursive: true, force: true });
+      }
+    });
 
     test("404s rather than 400s for a missing file that is inside the project", async () => {
       const p = await addFixture();

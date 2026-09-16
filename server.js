@@ -12,12 +12,34 @@ import { pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+// Strips the port, tolerating bracketed IPv6 literals.
+export function isLoopbackHost(hostHeader) {
+  const h = String(hostHeader || "").trim().toLowerCase();
+  if (!h) return false;
+  const host = h.startsWith("[") ? h.replace(/\]:\d+$/, "]") : h.replace(/:\d+$/, "");
+  return LOOPBACK_HOSTS.has(host);
+}
+
+function hostAllowlist(req, res, next) {
+  if (isLoopbackHost(req.headers.host)) return next();
+  res.status(403).json({ error: "Forbidden: requests must be addressed to localhost" });
+}
+
 // Build the HTTP app. dataDir holds projects.json (browser mode: ./data, app mode: Application Support).
 export function createApp({ dataDir = path.join(__dirname, "data") } = {}) {
 const DATA_DIR = dataDir;
 const DB_FILE = path.join(DATA_DIR, "projects.json");
 
 const app = express();
+
+// Only answer requests addressed to a loopback host. Binding to 127.0.0.1 keeps other
+// machines out, but a web page can still reach this port through DNS rebinding: a domain
+// whose record flips to 127.0.0.1 becomes same-origin with the server in the browser.
+// Such requests arrive with the attacker's domain in the Host header, so reject them.
+app.use(hostAllowlist);
+
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/vendor/d3.min.js", express.static(path.join(__dirname, "node_modules/d3/dist/d3.min.js")));
@@ -37,6 +59,17 @@ async function loadDb() {
 async function saveDb() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+// Resolve relPath inside root. Rejects lexical escapes ("../x") and symlinks that point
+// out of the project. Returns { abs } or { error, status }.
+async function resolveInside(root, relPath) {
+  const abs = path.resolve(root, relPath);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return { error: "Invalid path", status: 400 };
+  let real, realRoot;
+  try { real = await fs.realpath(abs); realRoot = await fs.realpath(root); } catch { return { error: "File not readable", status: 404 }; }
+  if (real !== realRoot && !real.startsWith(realRoot + path.sep)) return { error: "Invalid path", status: 400 };
+  return { abs: real };
 }
 
 function expandHome(p) {
@@ -168,15 +201,13 @@ app.delete("/api/projects/:id", async (req, res) => {
   res.status(204).end();
 });
 
-// Read a file inside a project (for the detail viewer). Rejects paths outside the project.
+// Read a file inside a project (for the detail viewer). Rejects paths and symlinks outside the project.
 app.get("/api/projects/:id/file", async (req, res) => {
   const p = findProject(req.params.id);
   if (!p) return res.status(404).json({ error: "Not found" });
   const relPath = String(req.query.path || "");
-  const abs = path.resolve(p.path, relPath);
-  if (abs !== p.path && !abs.startsWith(p.path + path.sep)) {
-    return res.status(400).json({ error: "Invalid path" });
-  }
+  const { abs, error, status } = await resolveInside(p.path, relPath);
+  if (error) return res.status(status).json({ error });
   try {
     const st = await fs.stat(abs);
     if (st.size > 1024 * 1024) return res.status(413).json({ error: "File too large to display" });
@@ -202,8 +233,8 @@ app.post("/api/projects/:id/open", async (req, res) => {
   const p = findProject(req.params.id);
   if (!p) return res.status(404).json({ error: "Not found" });
   const relPath = String(req.body?.path || "");
-  const abs = path.resolve(p.path, relPath);
-  if (abs !== p.path && !abs.startsWith(p.path + path.sep)) return res.status(400).json({ error: "Invalid path" });
+  const { abs, error, status } = await resolveInside(p.path, relPath);
+  if (error) return res.status(status).json({ error });
   if (process.platform !== "darwin") return res.status(501).json({ error: "Only supported on macOS" });
   const args = req.body?.reveal ? ["-R", abs] : [abs];
   execFile("open", args, (err) => {

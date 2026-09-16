@@ -1,0 +1,15 @@
+# Keeps the runtime dependencies (express, js-yaml, d3), electron and the pinned
+# GitHub Actions current. Security patches arrive as PRs; CI runs the tests on each.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

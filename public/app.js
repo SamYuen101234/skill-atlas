@@ -587,11 +587,9 @@ new ResizeObserver((entries) => {
 }).observe($("graph"));
 $("detail-open").onclick = () => {
   const rel = $("detail").dataset.path;
-  if (window.native) return window.native.openPath(`${state.current.path}/${rel}`);
   api("POST", `/api/projects/${state.current.id}/open`, { path: rel }).catch((e) => toast(e.message));
 };
 $("reveal-btn").onclick = () => {
-  if (window.native) return window.native.reveal(state.current.path);
   api("POST", `/api/projects/${state.current.id}/open`, { path: "", reveal: false }).catch((e) => toast(e.message));
 };
 

@@ -172,7 +172,7 @@ attaches them to a GitHub Release (signed and notarized if the Apple secrets are
 npm start
 ```
 
-Open <http://localhost:3210>. Set `PORT` to use a different port. The server binds to `127.0.0.1` only, because the API can read any file on disk and run git.
+Open <http://localhost:3210>. Set `PORT` to use a different port. The server binds to `127.0.0.1` only and refuses requests that are not addressed to localhost, because the API can read any file under the projects you add and run git in them. See [SECURITY.md](SECURITY.md).
 
 Click **+ Add project**, paste a path (`~` is expanded) or use **Browse…** to pick a folder with the native macOS dialog. The project is scanned immediately. Use **Rescan** after changing files. Click any card to see the file contents and its metadata; **Open** launches it in the default app.
 

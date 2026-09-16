@@ -20,7 +20,8 @@ npm run dist       # build the .dmg for both architectures
 - **Tests build fixtures in temp dirs** (`test/helpers.js`) rather than committing fixture
   trees. Add cases there, not as files in the repo.
 - **The server binds to loopback only** — the API reads arbitrary files and runs git. Keep
-  it that way, and keep the containment check on the file endpoint.
+  it that way, keep the Host-header allowlist (it blocks DNS rebinding from a web page), and
+  keep the containment check on the file endpoint.
 - **Scanner detection is by convention.** Changing a pattern in `scanner.js` changes what
   every user sees; cover it with a test in `test/scanner.test.js` first.
 

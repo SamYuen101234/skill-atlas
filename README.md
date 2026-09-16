@@ -8,10 +8,11 @@ A Mac app (also runnable in a browser): add project folders, scan them, and brow
 everything AI‑agent related that they contain — skills, agents, MCP servers, tools,
 workflows and plugins — as a list, a layered flow diagram or a relationship graph.
 
-<img src="docs/network-graph.svg" alt="Relationship graph: a skill node connected to the built-in tools it uses, alongside unconnected workflow and plugin nodes" width="500">
+<img src="docs/list.png" alt="Skill Atlas list view: a sidebar of projects, count tiles for each category, an author filter, and cards for the skill, workflows and plugin found in this repo" width="900">
 
-*The relationship graph, scanning this repo itself — a skill wired to the tools it's
-allowed to use, plus this project's own CI/release workflows and plugin.*
+*The list view, scanning this repo itself — one tile per category, a search box and
+author filter, and a card for every skill, workflow and plugin found. Click a card to read
+the file and its metadata.*
 
 It also **cuts plugin releases for you**. Pick a bump and it writes the new version to
 `plugin.json`, the marketplace listing, the `metadata.version` of every skill and agent in
@@ -183,6 +184,15 @@ Two graph views are available from the toggle at the top right of a project:
 
 - **Flow** (recommended): a layered left-to-right diagram with one column per category, in the order plugins → workflows → agents → skills → MCP servers → tools → built-in tools. Edges flow between columns; same-column references arc on the right. Node order within a column is chosen to reduce crossings. Hover a node to trace its edges, click to pin the highlight and open the file, click the background to unpin.
 - **Network**: a force-directed layout of the same data, useful for spotting clusters.
+
+<img src="docs/flow.png" alt="Flow view: columns for plugins, workflows, skills and built-in tools, with the authoring-skills node wired to Edit, Glob, Grep, Read and Write" width="900">
+
+*The flow diagram of this repo — the `authoring-skills` skill wired to the built-in tools
+it is allowed to use, with the plugin and CI/release workflows shown as unconnected nodes.*
+
+<img src="docs/network.png" alt="Network view: a force-directed graph with the authoring-skills node at the centre, arrows to five built-in tools, and the plugin and workflows floating unconnected" width="900">
+
+*The same data as a force-directed network.*
 
 **Start and end points.** The flow view fills marked nodes solid with their category colour (a marked skill is solid blue, an agent solid purple, …); start points get a ▶ before the name and end points a ■ after it. The counters at the top left of the canvas highlight each group. Roles are marked explicitly: open a node and press **Start** or **End** in the detail panel (stored per project in `data/projects.json`), or declare `role: start` / `role: end` in a skill or agent's frontmatter. There is no automatic detection, because cross-references between skills and agents are often bidirectional and make in/out degree a poor signal.
 

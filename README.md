@@ -1,5 +1,6 @@
 # Skill Atlas
 
+[![CI](https://github.com/SamYuen101234/skill-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/SamYuen101234/skill-atlas/actions/workflows/ci.yml)
 [![Release](https://github.com/SamYuen101234/skill-atlas/actions/workflows/release.yml/badge.svg)](https://github.com/SamYuen101234/skill-atlas/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -45,6 +46,7 @@ Everything runs locally; nothing is uploaded anywhere.
 - [Tests](#tests)
 - [Releasing a new version](#releasing-a-new-version)
 - [API](#api)
+- [Contributing](#contributing)
 - [Author](#author)
 
 ## Install
@@ -528,9 +530,15 @@ for a change that invalidates an existing `projects.json`.
 | GET    | `/api/projects/:id/file?path=` | Read a file inside the project |
 | POST   | `/api/pick-folder` | Native folder picker (macOS) |
 
+## Contributing
+
+Bug reports, new scanner detectors and UI improvements are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for local setup and what's most useful to work on.
+
 ## Author
 
 **Sam Yuen** — [@SamYuen101234](https://github.com/SamYuen101234)
 
 Released under the [MIT License](LICENSE). Issues and pull requests are welcome at
-[SamYuen101234/skill-atlas](https://github.com/SamYuen101234/skill-atlas).
+[SamYuen101234/skill-atlas](https://github.com/SamYuen101234/skill-atlas) — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to get set up and what's useful to work on.
